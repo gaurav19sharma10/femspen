@@ -1,223 +1,162 @@
-import React, { useState } from 'react';
-import { RvsLogo } from '../vector/RvsLogo';
-import { VectorIcon } from '../vector/VectorIcons';
-import { useAuth } from '../../context/AuthContext';
+import React from 'react';
+import { motion } from 'framer-motion';
 import { useExpense } from '../../context/ExpenseContext';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useAuth } from '../../context/AuthContext';
+import {
+  Search,
+  X,
+  User,
+  Users,
+  PieChart,
+  CalendarClock,
+  Lock,
+  Settings,
+  Download,
+} from 'lucide-react';
+import { formatCurrency } from '../../utils/currency';
+import { exportExpensesToCSV } from '../../utils/export';
 
 interface KeepHeaderProps {
-  onOpenFamilyModal?: () => void;
+  onOpenAnalytics: () => void;
+  onOpenRecurring: () => void;
+  onOpenSettings: () => void;
 }
 
-export const KeepHeader: React.FC<KeepHeaderProps> = ({ onOpenFamilyModal }) => {
-  const { user, userProfile, logout } = useAuth();
-  const {
-    mode,
-    setMode,
-    searchQuery,
-    setSearchQuery,
-    isSyncing,
-    household,
-  } = useExpense();
-
-  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
-  const [copiedCode, setCopiedCode] = useState(false);
-
-  const handleCopyCode = () => {
-    if (!household?.inviteCode) return;
-    navigator.clipboard.writeText(household.inviteCode);
-    setCopiedCode(true);
-    setTimeout(() => setCopiedCode(false), 2000);
-  };
-
-  const userInitials = (userProfile?.displayName || user?.email || 'GS')
-    .split(' ')
-    .map((n) => n[0])
-    .join('')
-    .substring(0, 2)
-    .toUpperCase();
+export const KeepHeader: React.FC<KeepHeaderProps> = ({
+  onOpenAnalytics,
+  onOpenRecurring,
+  onOpenSettings,
+}) => {
+  const { currentMode, setCurrentMode, searchQuery, setSearchQuery, stats, expenses } = useExpense();
+  const { lockSession, userProfile } = useAuth();
 
   return (
-    <header className="sticky top-0 z-40 bg-[#F8F7F4]/90 backdrop-blur-md border-b border-gray-200/80 px-4 md:px-8 py-3 transition-colors">
-      <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
-        {/* Left: Brand Identity */}
-        <div className="flex items-center gap-3">
-          <RvsLogo size={42} showText={true} />
-          
-          {mode === 'family' && household && (
-            <div className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 border border-blue-200/80 rounded-full text-xs font-semibold text-[#0057FF]">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#0057FF]" />
-              {household.name}
+    <header className="sticky top-0 z-30 bg-[#F8F7F4]/90 backdrop-blur-md border-b border-gray-200/60 px-4 py-3 transition-colors">
+      <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-3">
+        {/* Brand Logo & Mode Pill Switcher */}
+        <div className="flex items-center justify-between w-full md:w-auto gap-4">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-[#0057FF] flex items-center justify-center text-white font-black text-lg shadow-sm shadow-[#0057FF]/30">
+              F
             </div>
-          )}
+            <div>
+              <h1 className="text-base font-bold text-gray-900 leading-tight">FemSpen</h1>
+              <span className="text-[10px] font-medium text-gray-500 uppercase tracking-wider block">
+                Real-time Ledger
+              </span>
+            </div>
+          </div>
+
+          {/* Mode Pill Toggle (Google Keep style) */}
+          <div className="bg-gray-200/80 p-1 rounded-2xl flex items-center shadow-inner relative">
+            <button
+              onClick={() => setCurrentMode('individual')}
+              className={`relative z-10 px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer ${
+                currentMode === 'individual' ? 'text-gray-900' : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              {currentMode === 'individual' && (
+                <motion.div
+                  layoutId="mode-pill-bg"
+                  className="absolute inset-0 bg-white rounded-xl shadow-xs"
+                  transition={{ type: 'spring', stiffness: 450, damping: 35 }}
+                />
+              )}
+              <User size={13} className="relative z-10 text-[#0057FF]" />
+              <span className="relative z-10">Individual</span>
+            </button>
+
+            <button
+              onClick={() => setCurrentMode('family')}
+              className={`relative z-10 px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer ${
+                currentMode === 'family' ? 'text-gray-900' : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              {currentMode === 'family' && (
+                <motion.div
+                  layoutId="mode-pill-bg"
+                  className="absolute inset-0 bg-white rounded-xl shadow-xs"
+                  transition={{ type: 'spring', stiffness: 450, damping: 35 }}
+                />
+              )}
+              <Users size={13} className="relative z-10 text-emerald-600" />
+              <span className="relative z-10">Family</span>
+            </button>
+          </div>
         </div>
 
-        {/* Center: Google Keep Search Bar */}
-        <div className="flex-1 max-w-xl mx-2 md:mx-4">
-          <div className="relative flex items-center bg-white hover:bg-gray-50 focus-within:bg-white rounded-2xl border border-gray-200/90 shadow-sm focus-within:shadow-md focus-within:border-[#0057FF]/60 transition-all">
-            <div className="pl-4 pr-2 text-gray-400">
-              <VectorIcon name="search" size={19} />
-            </div>
+        {/* Google Keep Search Omnibar */}
+        <div className="w-full md:flex-1 max-w-xl">
+          <div className="relative flex items-center bg-white/90 hover:bg-white focus-within:bg-white border border-gray-200/80 rounded-2xl shadow-xs transition-all focus-within:ring-2 focus-within:ring-[#0057FF]/20 focus-within:border-[#0057FF]">
+            <Search size={18} className="absolute left-3.5 text-gray-400" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search expenses, merchants, notes, categories..."
-              className="w-full py-2.5 pr-10 text-sm bg-transparent outline-none text-gray-800 placeholder-gray-400 font-sans"
+              placeholder="Search expenses, notes, categories, tags..."
+              className="w-full pl-10 pr-9 py-2.5 bg-transparent text-sm text-gray-900 placeholder-gray-400 focus:outline-none"
             />
             {searchQuery && (
               <button
-                type="button"
                 onClick={() => setSearchQuery('')}
-                className="absolute right-3 p-1 text-gray-400 hover:text-gray-600 rounded-full cursor-pointer"
+                className="absolute right-3 text-gray-400 hover:text-gray-600 p-1 rounded-full cursor-pointer"
               >
-                <VectorIcon name="close" size={15} />
+                <X size={15} />
               </button>
             )}
           </div>
         </div>
 
-        {/* Right Actions */}
-        <div className="flex items-center gap-3 flex-shrink-0">
-          {/* Dual Mode Switcher Pill */}
-          <div className="flex items-center p-1 bg-gray-200/70 rounded-xl select-none">
-            <button
-              type="button"
-              onClick={() => setMode('family')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                mode === 'family'
-                  ? 'bg-white text-[#0057FF] shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              <VectorIcon name="users" size={14} />
-              <span>Family</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setMode('individual')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                mode === 'individual'
-                  ? 'bg-white text-[#0057FF] shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              <VectorIcon name="wallet" size={14} />
-              <span>Personal</span>
-            </button>
-          </div>
-
-          {/* Realtime Live Sync Indicator */}
-          <div
-            className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 bg-white border border-gray-200/80 rounded-full text-xs font-medium text-gray-600 shadow-sm"
-            title="Connected realtime to Firebase Firestore"
-          >
-            <span
-              className={`w-2 h-2 rounded-full ${
-                isSyncing ? 'bg-amber-500 animate-ping' : 'bg-emerald-500 animate-pulse'
-              }`}
-            />
-            <span className="text-[11px] font-semibold text-gray-700">
-              {isSyncing ? 'Syncing...' : 'Live Sync'}
+        {/* Action Buttons & Quick Stats */}
+        <div className="flex items-center gap-1.5 self-end md:self-auto">
+          <div className="hidden lg:flex flex-col text-right pr-2">
+            <span className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">
+              {currentMode === 'individual' ? 'My Spend' : 'Family Spend'}
+            </span>
+            <span className="text-sm font-bold text-gray-900">
+              {formatCurrency(stats.monthlySpend, userProfile?.currency)}
             </span>
           </div>
 
-          {/* Family Invite Code button */}
-          {mode === 'family' && household?.inviteCode && (
-            <button
-              type="button"
-              onClick={handleCopyCode}
-              title="Click to copy 6-digit family invite code"
-              className="hidden md:flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-gray-50 border border-gray-200/90 text-gray-700 rounded-xl text-xs font-medium shadow-sm transition-colors cursor-pointer"
-            >
-              <VectorIcon name="copy" size={13} color="#0057FF" />
-              <span>Code: <strong>{household.inviteCode}</strong></span>
-              {copiedCode && <span className="text-emerald-600 text-[10px] font-bold">Copied!</span>}
-            </button>
-          )}
+          <button
+            onClick={onOpenAnalytics}
+            className="p-2.5 bg-white hover:bg-gray-100 border border-gray-200/80 rounded-xl text-gray-700 hover:text-[#0057FF] transition-colors cursor-pointer shadow-xs"
+            title="Analytics & Charts"
+          >
+            <PieChart size={17} />
+          </button>
 
-          {/* User Avatar with Dropdown */}
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
-              className="w-9 h-9 rounded-full bg-[#0057FF] text-white font-bold text-xs flex items-center justify-center shadow-md shadow-[#0057FF]/20 hover:ring-2 hover:ring-[#0057FF]/40 transition-all cursor-pointer"
-            >
-              {userInitials}
-            </button>
+          <button
+            onClick={onOpenRecurring}
+            className="p-2.5 bg-white hover:bg-gray-100 border border-gray-200/80 rounded-xl text-gray-700 hover:text-[#0057FF] transition-colors cursor-pointer shadow-xs"
+            title="Recurring Subscriptions"
+          >
+            <CalendarClock size={17} />
+          </button>
 
-            <AnimatePresence>
-              {isProfileMenuOpen && (
-                <motion.div
-                  initial={{ opacity: 0, y: 8, scale: 0.95 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: 8, scale: 0.95 }}
-                  transition={{ duration: 0.15 }}
-                  className="absolute right-0 mt-2 w-64 bg-white rounded-2xl shadow-xl border border-gray-200/80 p-3 z-50 text-gray-800"
-                >
-                  <div className="pb-3 border-b border-gray-100 flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-[#0057FF] text-white font-bold text-sm flex items-center justify-center flex-shrink-0">
-                      {userInitials}
-                    </div>
-                    <div className="overflow-hidden">
-                      <p className="font-semibold text-sm truncate text-gray-900">
-                        {userProfile?.displayName || 'User'}
-                      </p>
-                      <p className="text-xs text-gray-500 truncate">{user?.email}</p>
-                    </div>
-                  </div>
+          <button
+            onClick={() => exportExpensesToCSV(expenses, `expenses_${currentMode}_${new Date().toISOString().slice(0, 10)}.csv`)}
+            className="p-2.5 bg-white hover:bg-gray-100 border border-gray-200/80 rounded-xl text-gray-700 hover:text-[#0057FF] transition-colors cursor-pointer shadow-xs"
+            title="Export CSV"
+          >
+            <Download size={17} />
+          </button>
 
-                  <div className="py-2 space-y-1">
-                    {onOpenFamilyModal && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIsProfileMenuOpen(false);
-                          onOpenFamilyModal();
-                        }}
-                        className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-100/80 rounded-xl transition-colors cursor-pointer"
-                      >
-                        <VectorIcon name="users" size={15} color="#0057FF" />
-                        <span>Manage Family & Invites</span>
-                      </button>
-                    )}
+          <button
+            onClick={onOpenSettings}
+            className="p-2.5 bg-white hover:bg-gray-100 border border-gray-200/80 rounded-xl text-gray-700 hover:text-[#0057FF] transition-colors cursor-pointer shadow-xs"
+            title="Settings & Currency"
+          >
+            <Settings size={17} />
+          </button>
 
-                    {household?.inviteCode && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          handleCopyCode();
-                        }}
-                        className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-100/80 rounded-xl transition-colors cursor-pointer"
-                      >
-                        <span className="flex items-center gap-2.5">
-                          <VectorIcon name="copy" size={15} color="#64748B" />
-                          <span>Invite Code</span>
-                        </span>
-                        <span className="font-mono bg-blue-50 text-[#0057FF] px-2 py-0.5 rounded text-[11px] font-bold">
-                          {household.inviteCode}
-                        </span>
-                      </button>
-                    )}
-                  </div>
-
-                  <div className="pt-2 border-t border-gray-100">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsProfileMenuOpen(false);
-                        logout();
-                      }}
-                      className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-50 rounded-xl transition-colors cursor-pointer"
-                    >
-                      <VectorIcon name="logout" size={15} color="#EF4444" />
-                      <span>Sign out</span>
-                    </button>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
+          <button
+            onClick={lockSession}
+            className="p-2.5 bg-blue-50/80 hover:bg-blue-100 border border-blue-200/60 rounded-xl text-[#0057FF] transition-colors cursor-pointer shadow-xs"
+            title="Lock Vault (2FA PIN)"
+          >
+            <Lock size={17} />
+          </button>
         </div>
       </div>
     </header>

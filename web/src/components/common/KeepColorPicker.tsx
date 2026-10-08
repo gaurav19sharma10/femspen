@@ -19,20 +19,26 @@ export const KEEP_CARD_COLORS: KeepColor[] = [
 ];
 
 interface KeepColorPickerProps {
-  selectedColor: string;
-  onSelectColor: (hex: string) => void;
+  selectedColor?: string;
+  selectedHex?: string;
+  onSelectColor?: (hex: string) => void;
+  onSelect?: (hex: string) => void;
   className?: string;
 }
 
 export const KeepColorPicker: React.FC<KeepColorPickerProps> = ({
   selectedColor,
+  selectedHex,
   onSelectColor,
+  onSelect,
   className = '',
 }) => {
+  const activeColor = selectedColor || selectedHex || '#FFFFFF';
+  const handleSelect = onSelectColor || onSelect || (() => {});
   return (
     <div className={`flex items-center gap-1.5 p-1.5 bg-white rounded-full shadow-lg border border-gray-200/80 z-50 ${className}`}>
       {KEEP_CARD_COLORS.map((c) => {
-        const isSelected = selectedColor.toLowerCase() === c.hex.toLowerCase();
+        const isSelected = activeColor.toLowerCase() === c.hex.toLowerCase();
         return (
           <button
             key={c.id}
@@ -40,7 +46,7 @@ export const KeepColorPicker: React.FC<KeepColorPickerProps> = ({
             title={c.name}
             onClick={(e) => {
               e.stopPropagation();
-              onSelectColor(c.hex);
+              handleSelect(c.hex);
             }}
             style={{ backgroundColor: c.hex }}
             className={`w-6 h-6 rounded-full border transition-transform hover:scale-115 cursor-pointer ${

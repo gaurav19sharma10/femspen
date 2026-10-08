@@ -4,22 +4,20 @@ import { getFirestore, Firestore, enableIndexedDbPersistence } from 'firebase/fi
 import { getStorage, FirebaseStorage } from 'firebase/storage';
 
 export const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || 'AIzaSyBr3jEmFnTn9-go8qmDDtx5-sA381E4Vhc',
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || 'expence-rvs.firebaseapp.com',
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || 'expence-rvs',
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || 'expence-rvs.firebasestorage.app',
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '654418160294',
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || '1:654418160294:web:fbcc1fd2e537534b63a267',
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || 'AIzaSyB-DcIyCrM5tVMtW0vhGp21Kkf99Xc02LM',
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || 'femspen-bee68.firebaseapp.com',
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || 'femspen-bee68',
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || 'femspen-bee68.firebasestorage.app',
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '1089614326492',
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || '1:1089614326492:web:1c3de3265648b4ffae6219',
 };
 
 export const app: FirebaseApp = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 export const auth: Auth = getAuth(app);
 export const db: Firestore = getFirestore(app);
-export const storage: FirebaseStorage = getStorage(app);
-
-// Enable persistent auth session
-if (typeof window !== 'undefined') {
-  setPersistence(auth, browserLocalPersistence).catch((err) => {
-    console.warn('Could not set browserLocalPersistence:', err);
-  });
-}
+// Export flag indicating firebase initialization status
+export const isFirebaseConfigured: boolean = Boolean(
+  firebaseConfig.apiKey &&
+  firebaseConfig.projectId &&
+  !firebaseConfig.apiKey.includes('placeholder')
+);

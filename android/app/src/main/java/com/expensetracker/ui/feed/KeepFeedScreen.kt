@@ -78,7 +78,7 @@ fun KeepFeedScreen(
                     TextField(
                         value = searchQuery,
                         onValueChange = { searchQuery = it },
-                        placeholder = { Text("Search Keep expenses...", fontSize = 14.sp, color = Color(0xFF94A3B8)) },
+                        placeholder = { Text("Search FemSpen...", fontSize = 14.sp, color = Color(0xFF94A3B8)) },
                         colors = TextFieldDefaults.colors(
                             focusedContainerColor = Color.Transparent,
                             unfocusedContainerColor = Color.Transparent,

@@ -1,7 +1,7 @@
 {
-  "name": "Keep Expenses",
-  "short_name": "KeepExpenses",
-  "description": "Google Keep-style Real-time Expense Tracker",
+  "name": "FemSpen",
+  "short_name": "FemSpen",
+  "description": "FemSpen - Real-time Expense Tracker",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#F8F7F4",

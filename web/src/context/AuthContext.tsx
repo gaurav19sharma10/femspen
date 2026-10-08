@@ -4,106 +4,82 @@ import {
   createUserWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
-  sendPasswordResetEmail,
-  User as FirebaseUser,
+  User as FirebaseUser
 } from 'firebase/auth';
-import { auth, db } from '../lib/firebase';
-import { doc, onSnapshot } from 'firebase/firestore';
-import { getOrCreateUserProfile, discoverHouseholdForUser } from '../services/rvsRepo';
-import type { UserProfile } from '../domain/types';
-
-interface ExtendedUserProfile extends UserProfile {
-  householdIds: string[];
-  pinHash?: string;
-  pinSalt?: string;
-  pinEnabled?: boolean;
-}
+import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
+import { auth, db, isFirebaseConfigured } from '../lib/firebase';
+import { generateSalt, hashString, verifyHash } from '../lib/crypto';
+import { UserProfile, ExpenseMode } from '../types';
 
 interface AuthContextType {
   user: { uid: string; email: string } | null;
-  userProfile: ExtendedUserProfile | null;
+  userProfile: UserProfile | null;
   isAuthenticated: boolean;
-  activeHouseholdId: string | null;
-  setActiveHouseholdId: (hid: string) => void;
   isPinLocked: boolean;
+  isPinConfigured: boolean;
   loading: boolean;
   loginWithEmail: (email: string, pass: string) => Promise<{ success: boolean; error?: string }>;
   signupWithEmail: (email: string, pass: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
   unlockWithPin: (pin: string) => Promise<boolean>;
+  setupPinAndSecurity: (pin: string, question: string, answer: string) => Promise<boolean>;
+  resetPinWithSecurityAnswer: (answer: string, newPin: string) => Promise<{ success: boolean; error?: string }>;
   lockSession: () => void;
-  sendResetEmail: (email: string) => Promise<{ success: boolean; error?: string }>;
+  updateCurrency: (currency: string) => Promise<void>;
+  updateMonthlyBudget: (mode: ExpenseMode, amount: number) => Promise<void>;
+  enableDemoMode: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const LOCAL_STORAGE_PROFILE_KEY = 'EXPENSE_TRACKER_LOCAL_PROFILE';
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<{ uid: string; email: string } | null>(null);
-  const [userProfile, setUserProfile] = useState<ExtendedUserProfile | null>(null);
-  const [activeHouseholdId, setActiveHouseholdId] = useState<string | null>(null);
-  const [isPinLocked, setIsPinLocked] = useState<boolean>(false);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [isPinLocked, setIsPinLocked] = useState<boolean>(true);
   const [loading, setLoading] = useState<boolean>(true);
 
-  // 1. Firebase Auth listener
   useEffect(() => {
+    if (!isFirebaseConfigured || !auth) {
+      const savedProfile = localStorage.getItem(LOCAL_STORAGE_PROFILE_KEY);
+      if (savedProfile) {
+        try {
+          const parsed = JSON.parse(savedProfile);
+          setUser({ uid: parsed.uid || 'demo-user', email: parsed.email || 'demo@femspen.app' });
+          setUserProfile(parsed);
+          setIsPinLocked(true);
+        } catch {
+          // ignore
+        }
+      }
+      setLoading(false);
+      return;
+    }
+
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: FirebaseUser | null) => {
       if (firebaseUser) {
-        console.warn('🔑 AUTH USER:', firebaseUser.uid, firebaseUser.email);
         setUser({ uid: firebaseUser.uid, email: firebaseUser.email || '' });
-
-        try {
-          // Fetch or initialize profile
-          const profile = await getOrCreateUserProfile(
-            firebaseUser.uid,
-            firebaseUser.email || '',
-            firebaseUser.displayName || undefined
-          );
-
-          // Find active household
-          let hid = profile.householdIds && profile.householdIds.length > 0 ? profile.householdIds[0] : null;
-
-          if (!hid) {
-            hid = await discoverHouseholdForUser(firebaseUser.uid);
-          }
-
-          setActiveHouseholdId(hid);
-          setUserProfile(profile as ExtendedUserProfile);
-        } catch (err) {
-          console.error('Error fetching user profile:', err);
-        }
-
-        // Realtime listener for user profile updates
-        const userDocRef = doc(db, 'users', firebaseUser.uid);
-        const unsubProfile = onSnapshot(userDocRef, (snap) => {
-          if (snap.exists()) {
-            const data = snap.data();
-            setUserProfile((prev) => ({
-              uid: firebaseUser.uid,
-              displayName: data.displayName || firebaseUser.email?.split('@')[0] || 'User',
-              email: data.email || firebaseUser.email || '',
-              photoURL: data.photoURL || null,
-              displayCurrency: data.displayCurrency || 'INR',
-              defaultWeight: data.defaultWeight || 1,
-              createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date(),
-              householdIds: Array.isArray(data.householdIds) ? data.householdIds : [],
-              pinHash: data.pinHash,
-              pinSalt: data.pinSalt,
-              pinEnabled: Boolean(data.pinEnabled),
-            }));
-
-            if (Array.isArray(data.householdIds) && data.householdIds.length > 0 && !activeHouseholdId) {
-              setActiveHouseholdId(data.householdIds[0]);
+        
+        if (db) {
+          const userDocRef = doc(db, 'users', firebaseUser.uid);
+          const unsubDoc = onSnapshot(userDocRef, (snapshot) => {
+            if (snapshot.exists()) {
+              const data = snapshot.data() as UserProfile;
+              setUserProfile(data);
+            } else {
+              setUserProfile(null);
             }
-          }
-        });
-
-        setLoading(false);
-        return () => unsubProfile();
+            setLoading(false);
+          }, (err) => {
+            console.error('Firestore user profile snapshot error:', err);
+            setLoading(false);
+          });
+          return () => unsubDoc();
+        }
       } else {
         setUser(null);
         setUserProfile(null);
-        setActiveHouseholdId(null);
-        setIsPinLocked(false);
         setLoading(false);
       }
     });
@@ -111,66 +87,199 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => unsubscribe();
   }, []);
 
+  const isPinConfigured = Boolean(userProfile?.pinHash && userProfile?.pinSalt && userProfile?.securityAnswerHash);
+
   const loginWithEmail = async (email: string, pass: string) => {
+    if (!isFirebaseConfigured || !auth) {
+      const dummyUid = 'user-' + email.replace(/[^a-zA-Z0-9]/g, '_');
+      const newUser = { uid: dummyUid, email };
+      setUser(newUser);
+      
+      const localProfile = localStorage.getItem(LOCAL_STORAGE_PROFILE_KEY);
+      if (localProfile) {
+        const parsed = JSON.parse(localProfile);
+        setUserProfile(parsed);
+      }
+      setIsPinLocked(true);
+      return { success: true };
+    }
+
     try {
-      const res = await signInWithEmailAndPassword(auth, email.trim(), pass);
+      await signInWithEmailAndPassword(auth, email, pass);
+      setIsPinLocked(true);
       return { success: true };
     } catch (err: any) {
-      console.error('Login error:', err);
-      let message = 'Failed to sign in. Please check your email and password.';
-      if (err.code === 'auth/invalid-credential' || err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password') {
-        message = 'Invalid email or password. Please verify and try again.';
-      } else if (err.code === 'auth/invalid-email') {
-        message = 'Please enter a valid email address.';
-      } else if (err.code === 'auth/too-many-requests') {
-        message = 'Too many attempts. Access temporarily restricted. Try again later.';
-      }
-      return { success: false, error: message };
+      return { success: false, error: err.message || 'Failed to sign in' };
     }
   };
 
   const signupWithEmail = async (email: string, pass: string) => {
+    if (!isFirebaseConfigured || !auth) {
+      const dummyUid = 'user-' + email.replace(/[^a-zA-Z0-9]/g, '_');
+      const newUser = { uid: dummyUid, email };
+      setUser(newUser);
+      setUserProfile(null);
+      setIsPinLocked(true);
+      return { success: true };
+    }
+
     try {
-      const res = await createUserWithEmailAndPassword(auth, email.trim(), pass);
-      await getOrCreateUserProfile(res.user.uid, res.user.email || email);
+      await createUserWithEmailAndPassword(auth, email, pass);
+      setIsPinLocked(true);
       return { success: true };
     } catch (err: any) {
-      console.error('Signup error:', err);
-      let message = 'Could not create account.';
-      if (err.code === 'auth/email-already-in-use') {
-        message = 'This email is already in use. Please sign in instead.';
-      } else if (err.code === 'auth/weak-password') {
-        message = 'Password is too weak. Please choose at least 6 characters.';
-      }
-      return { success: false, error: message };
+      return { success: false, error: err.message || 'Failed to create account' };
     }
   };
 
   const logout = async () => {
-    await signOut(auth);
+    if (auth) {
+      await signOut(auth);
+    }
     setUser(null);
     setUserProfile(null);
-    setActiveHouseholdId(null);
-    setIsPinLocked(false);
+    setIsPinLocked(true);
   };
 
   const unlockWithPin = async (pin: string): Promise<boolean> => {
-    // If PIN is enabled in profile or local storage
+    if (!userProfile?.pinHash || !userProfile?.pinSalt) return false;
+    const isValid = await verifyHash(pin, userProfile.pinSalt, userProfile.pinHash);
+    if (isValid) {
+      setIsPinLocked(false);
+      return true;
+    }
+    return false;
+  };
+
+  const setupPinAndSecurity = async (pin: string, question: string, answer: string): Promise<boolean> => {
+    if (!user) return false;
+
+    const pinSalt = generateSalt();
+    const pinHash = await hashString(pin, pinSalt);
+
+    const answerSalt = generateSalt();
+    const securityAnswerHash = await hashString(answer, answerSalt);
+
+    const newProfile: UserProfile = {
+      uid: user.uid,
+      email: user.email,
+      pinHash,
+      pinSalt,
+      securityQuestion: question,
+      securityAnswerHash: `${securityAnswerHash}:${answerSalt}`,
+      currency: 'USD',
+      monthlyBudget: {
+        individual: 1500,
+        family: 4500,
+      },
+      createdAt: Date.now(),
+    };
+
+    if (isFirebaseConfigured && db) {
+      try {
+        await setDoc(doc(db, 'users', user.uid), newProfile);
+      } catch (err) {
+        console.error('Error saving profile to Firestore:', err);
+      }
+    }
+
+    localStorage.setItem(LOCAL_STORAGE_PROFILE_KEY, JSON.stringify(newProfile));
+    setUserProfile(newProfile);
     setIsPinLocked(false);
     return true;
+  };
+
+  const resetPinWithSecurityAnswer = async (answer: string, newPin: string): Promise<{ success: boolean; error?: string }> => {
+    if (!userProfile || !userProfile.securityAnswerHash) {
+      return { success: false, error: 'No security question configured.' };
+    }
+
+    const [expectedHash, salt] = userProfile.securityAnswerHash.split(':');
+    const isAnswerValid = await verifyHash(answer, salt, expectedHash);
+
+    if (!isAnswerValid) {
+      return { success: false, error: 'Incorrect security answer. Please try again.' };
+    }
+
+    const newSalt = generateSalt();
+    const newPinHash = await hashString(newPin, newSalt);
+
+    const updatedProfile: UserProfile = {
+      ...userProfile,
+      pinHash: newPinHash,
+      pinSalt: newSalt,
+    };
+
+    if (isFirebaseConfigured && db && user) {
+      try {
+        await setDoc(doc(db, 'users', user.uid), updatedProfile);
+      } catch (err) {
+        console.error('Error updating profile in Firestore:', err);
+      }
+    }
+
+    localStorage.setItem(LOCAL_STORAGE_PROFILE_KEY, JSON.stringify(updatedProfile));
+    setUserProfile(updatedProfile);
+    setIsPinLocked(false);
+    return { success: true };
   };
 
   const lockSession = () => {
     setIsPinLocked(true);
   };
 
-  const sendResetEmail = async (email: string) => {
-    try {
-      await sendPasswordResetEmail(auth, email.trim());
-      return { success: true };
-    } catch (err: any) {
-      return { success: false, error: err.message || 'Could not send reset link' };
+  const updateCurrency = async (newCurrency: string) => {
+    if (!userProfile) return;
+    const updated = { ...userProfile, currency: newCurrency };
+    setUserProfile(updated);
+    if (isFirebaseConfigured && db && user) {
+      await setDoc(doc(db, 'users', user.uid), updated);
     }
+    localStorage.setItem(LOCAL_STORAGE_PROFILE_KEY, JSON.stringify(updated));
+  };
+
+  const updateMonthlyBudget = async (mode: ExpenseMode, amount: number) => {
+    if (!userProfile) return;
+    const updated: UserProfile = {
+      ...userProfile,
+      monthlyBudget: {
+        ...userProfile.monthlyBudget,
+        [mode]: amount,
+      },
+    };
+    setUserProfile(updated);
+    if (isFirebaseConfigured && db && user) {
+      await setDoc(doc(db, 'users', user.uid), updated);
+    }
+    localStorage.setItem(LOCAL_STORAGE_PROFILE_KEY, JSON.stringify(updated));
+  };
+
+  const enableDemoMode = async () => {
+    const demoUser = { uid: 'demo-user-keep', email: 'demo@femspen.app' };
+    const salt = generateSalt();
+    const pinHash = await hashString('1234', salt);
+    const ansSalt = generateSalt();
+    const ansHash = await hashString('Blue', ansSalt);
+
+    const demoProfile: UserProfile = {
+      uid: demoUser.uid,
+      email: demoUser.email,
+      pinHash,
+      pinSalt: salt,
+      securityQuestion: 'What is your favorite color?',
+      securityAnswerHash: `${ansHash}:${ansSalt}`,
+      currency: 'USD',
+      monthlyBudget: {
+        individual: 1200,
+        family: 3800,
+      },
+      createdAt: Date.now(),
+    };
+
+    localStorage.setItem(LOCAL_STORAGE_PROFILE_KEY, JSON.stringify(demoProfile));
+    setUser(demoUser);
+    setUserProfile(demoProfile);
+    setIsPinLocked(false);
   };
 
   return (
@@ -178,17 +287,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       value={{
         user,
         userProfile,
-        isAuthenticated: Boolean(user),
-        activeHouseholdId,
-        setActiveHouseholdId,
+        isAuthenticated: !!user,
         isPinLocked,
+        isPinConfigured,
         loading,
         loginWithEmail,
         signupWithEmail,
         logout,
         unlockWithPin,
+        setupPinAndSecurity,
+        resetPinWithSecurityAnswer,
         lockSession,
-        sendResetEmail,
+        updateCurrency,
+        updateMonthlyBudget,
+        enableDemoMode,
       }}
     >
       {children}
@@ -196,10 +308,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   );
 };
 
-export const useAuth = (): AuthContextType => {
+export const useAuth = () => {
   const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
+  if (!context) throw new Error('useAuth must be used within an AuthProvider');
   return context;
 };

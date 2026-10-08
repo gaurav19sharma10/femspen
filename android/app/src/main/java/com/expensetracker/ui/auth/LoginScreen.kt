@@ -58,7 +58,7 @@ fun LoginScreen(
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Text(
-                            text = "K",
+                            text = "F",
                             color = Color.White,
                             fontSize = 28.sp,
                             fontWeight = FontWeight.Black
@@ -69,7 +69,7 @@ fun LoginScreen(
                 Spacer(modifier = Modifier.height(16.dp))
 
                 Text(
-                    text = "Keep Expenses",
+                    text = "FemSpen",
                     style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.Bold,
                     color = Color(0xFF1E293B)

@@ -9,7 +9,7 @@ android {
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.expensetracker"
+        applicationId = "com.femspen.android"
         minSdk = 26
         targetSdk = 34
         versionCode = 1
