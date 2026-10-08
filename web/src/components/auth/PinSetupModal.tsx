@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { SECURITY_QUESTIONS } from '../../types';
-import { KeepVaultArt } from '../common/VectorArt';
+import { FemSpenVaultArt } from '../common/VectorArt';
 import { ShieldCheck, Lock, HelpCircle, AlertCircle } from 'lucide-react';
 
 export const PinSetupModal: React.FC = () => {
@@ -49,7 +49,7 @@ export const PinSetupModal: React.FC = () => {
     <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
       <div className="bg-white rounded-3xl border border-gray-200 max-w-md w-full p-7 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
         <div className="flex flex-col items-center text-center mb-6">
-          <KeepVaultArt size={90} className="mb-2" />
+          <FemSpenVaultArt size={90} className="mb-2" />
           <h2 className="text-xl font-bold text-gray-900">Set Up 2FA Security PIN</h2>
           <p className="text-xs text-gray-500 mt-1 max-w-xs">
             Create a 4-digit PIN and security question to secure your financial records across Web and Android.

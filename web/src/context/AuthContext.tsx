@@ -6,7 +6,7 @@ import {
   onAuthStateChanged,
   User as FirebaseUser
 } from 'firebase/auth';
-import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
+import { doc, setDoc, onSnapshot } from 'firebase/firestore';
 import { auth, db, isFirebaseConfigured } from '../lib/firebase';
 import { generateSalt, hashString, verifyHash } from '../lib/crypto';
 import { UserProfile, ExpenseMode } from '../types';
@@ -27,12 +27,35 @@ interface AuthContextType {
   lockSession: () => void;
   updateCurrency: (currency: string) => Promise<void>;
   updateMonthlyBudget: (mode: ExpenseMode, amount: number) => Promise<void>;
-  enableDemoMode: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const LOCAL_STORAGE_PROFILE_KEY = 'EXPENSE_TRACKER_LOCAL_PROFILE';
+const LOCAL_STORAGE_PROFILE_KEY = 'FEMSPEN_PROFILE';
+
+const formatFirebaseError = (error: any): string => {
+  const code = error?.code || '';
+  switch (code) {
+    case 'auth/invalid-credential':
+    case 'auth/wrong-password':
+    case 'auth/user-not-found':
+      return 'Incorrect email or password. Please verify your details or register a new account.';
+    case 'auth/email-already-in-use':
+      return 'This email address is already registered. Please sign in instead.';
+    case 'auth/weak-password':
+      return 'Password should be at least 6 characters.';
+    case 'auth/invalid-email':
+      return 'Please enter a valid email address.';
+    case 'auth/operation-not-allowed':
+      return 'Email/Password sign-in is disabled in your Firebase Console. Please enable it under Authentication > Sign-in method.';
+    case 'auth/too-many-requests':
+      return 'Too many failed login attempts. Please wait a few moments before trying again.';
+    case 'auth/network-request-failed':
+      return 'Network connection failed. Please check your internet connection.';
+    default:
+      return error?.message || 'Authentication failed. Please try again.';
+  }
+};
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<{ uid: string; email: string } | null>(null);
@@ -42,93 +65,101 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     if (!isFirebaseConfigured || !auth) {
-      const savedProfile = localStorage.getItem(LOCAL_STORAGE_PROFILE_KEY);
-      if (savedProfile) {
-        try {
-          const parsed = JSON.parse(savedProfile);
-          setUser({ uid: parsed.uid || 'demo-user', email: parsed.email || 'demo@femspen.app' });
-          setUserProfile(parsed);
-          setIsPinLocked(true);
-        } catch {
-          // ignore
-        }
-      }
       setLoading(false);
       return;
     }
 
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: FirebaseUser | null) => {
+    let unsubDoc: (() => void) | null = null;
+
+    const unsubscribeAuth = onAuthStateChanged(auth, async (firebaseUser: FirebaseUser | null) => {
+      if (unsubDoc) {
+        unsubDoc();
+        unsubDoc = null;
+      }
+
       if (firebaseUser) {
-        setUser({ uid: firebaseUser.uid, email: firebaseUser.email || '' });
-        
+        const currentUser = { uid: firebaseUser.uid, email: firebaseUser.email || '' };
+        setUser(currentUser);
+
+        // Instant local cache restoration
+        const cachedStr = localStorage.getItem(`${LOCAL_STORAGE_PROFILE_KEY}_${firebaseUser.uid}`);
+        let hasCachedProfile = false;
+        if (cachedStr) {
+          try {
+            const cachedProfile = JSON.parse(cachedStr);
+            setUserProfile(cachedProfile);
+            hasCachedProfile = true;
+          } catch {
+            // ignore
+          }
+        }
+
+        // Live real-time Firestore sync
         if (db) {
           const userDocRef = doc(db, 'users', firebaseUser.uid);
-          const unsubDoc = onSnapshot(userDocRef, (snapshot) => {
-            if (snapshot.exists()) {
-              const data = snapshot.data() as UserProfile;
-              setUserProfile(data);
-            } else {
-              setUserProfile(null);
+          unsubDoc = onSnapshot(
+            userDocRef,
+            (snapshot) => {
+              if (snapshot.exists()) {
+                const data = snapshot.data() as UserProfile;
+                setUserProfile(data);
+                localStorage.setItem(`${LOCAL_STORAGE_PROFILE_KEY}_${firebaseUser.uid}`, JSON.stringify(data));
+              } else if (!hasCachedProfile) {
+                setUserProfile(null);
+              }
+              setLoading(false);
+            },
+            (err) => {
+              console.warn('Firestore profile listener notice:', err.message);
+              setLoading(false);
             }
-            setLoading(false);
-          }, (err) => {
-            console.error('Firestore user profile snapshot error:', err);
-            setLoading(false);
-          });
-          return () => unsubDoc();
+          );
+        } else {
+          setLoading(false);
         }
       } else {
         setUser(null);
         setUserProfile(null);
+        setIsPinLocked(true);
         setLoading(false);
       }
     });
 
-    return () => unsubscribe();
+    return () => {
+      if (unsubDoc) unsubDoc();
+      unsubscribeAuth();
+    };
   }, []);
 
-  const isPinConfigured = Boolean(userProfile?.pinHash && userProfile?.pinSalt && userProfile?.securityAnswerHash);
+  const isPinConfigured = Boolean(
+    userProfile?.pinHash && userProfile?.pinSalt && userProfile?.securityAnswerHash
+  );
 
-  const loginWithEmail = async (email: string, pass: string) => {
-    if (!isFirebaseConfigured || !auth) {
-      const dummyUid = 'user-' + email.replace(/[^a-zA-Z0-9]/g, '_');
-      const newUser = { uid: dummyUid, email };
-      setUser(newUser);
-      
-      const localProfile = localStorage.getItem(LOCAL_STORAGE_PROFILE_KEY);
-      if (localProfile) {
-        const parsed = JSON.parse(localProfile);
-        setUserProfile(parsed);
-      }
-      setIsPinLocked(true);
-      return { success: true };
+  const loginWithEmail = async (email: string, pass: string): Promise<{ success: boolean; error?: string }> => {
+    if (!auth) {
+      return { success: false, error: 'Firebase Auth is not initialized.' };
     }
 
     try {
-      await signInWithEmailAndPassword(auth, email, pass);
+      await signInWithEmailAndPassword(auth, email.trim(), pass);
       setIsPinLocked(true);
       return { success: true };
     } catch (err: any) {
-      return { success: false, error: err.message || 'Failed to sign in' };
+      return { success: false, error: formatFirebaseError(err) };
     }
   };
 
-  const signupWithEmail = async (email: string, pass: string) => {
-    if (!isFirebaseConfigured || !auth) {
-      const dummyUid = 'user-' + email.replace(/[^a-zA-Z0-9]/g, '_');
-      const newUser = { uid: dummyUid, email };
-      setUser(newUser);
-      setUserProfile(null);
-      setIsPinLocked(true);
-      return { success: true };
+  const signupWithEmail = async (email: string, pass: string): Promise<{ success: boolean; error?: string }> => {
+    if (!auth) {
+      return { success: false, error: 'Firebase Auth is not initialized.' };
     }
 
     try {
-      await createUserWithEmailAndPassword(auth, email, pass);
+      await createUserWithEmailAndPassword(auth, email.trim(), pass);
       setIsPinLocked(true);
       return { success: true };
     } catch (err: any) {
-      return { success: false, error: err.message || 'Failed to create account' };
+      return { success: false, error: formatFirebaseError(err) };
     }
   };
 
@@ -158,7 +189,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const pinHash = await hashString(pin, pinSalt);
 
     const answerSalt = generateSalt();
-    const securityAnswerHash = await hashString(answer, answerSalt);
+    const securityAnswerHash = await hashString(answer.trim().toLowerCase(), answerSalt);
 
     const newProfile: UserProfile = {
       uid: user.uid,
@@ -175,17 +206,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       createdAt: Date.now(),
     };
 
-    if (isFirebaseConfigured && db) {
+    // Save locally first so user is immediately unblocked
+    localStorage.setItem(`${LOCAL_STORAGE_PROFILE_KEY}_${user.uid}`, JSON.stringify(newProfile));
+    setUserProfile(newProfile);
+    setIsPinLocked(false);
+
+    // Save to Firestore in real-time
+    if (db) {
       try {
         await setDoc(doc(db, 'users', user.uid), newProfile);
-      } catch (err) {
-        console.error('Error saving profile to Firestore:', err);
+      } catch (err: any) {
+        console.warn('Note: Profile saved locally. Firestore cloud sync notice:', err.message);
       }
     }
 
-    localStorage.setItem(LOCAL_STORAGE_PROFILE_KEY, JSON.stringify(newProfile));
-    setUserProfile(newProfile);
-    setIsPinLocked(false);
     return true;
   };
 
@@ -195,7 +229,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     const [expectedHash, salt] = userProfile.securityAnswerHash.split(':');
-    const isAnswerValid = await verifyHash(answer, salt, expectedHash);
+    const isAnswerValid = await verifyHash(answer.trim().toLowerCase(), salt, expectedHash);
 
     if (!isAnswerValid) {
       return { success: false, error: 'Incorrect security answer. Please try again.' };
@@ -210,17 +244,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       pinSalt: newSalt,
     };
 
-    if (isFirebaseConfigured && db && user) {
+    localStorage.setItem(`${LOCAL_STORAGE_PROFILE_KEY}_${userProfile.uid}`, JSON.stringify(updatedProfile));
+    setUserProfile(updatedProfile);
+    setIsPinLocked(false);
+
+    if (db && user) {
       try {
         await setDoc(doc(db, 'users', user.uid), updatedProfile);
-      } catch (err) {
-        console.error('Error updating profile in Firestore:', err);
+      } catch (err: any) {
+        console.warn('Note: PIN updated locally. Firestore sync notice:', err.message);
       }
     }
 
-    localStorage.setItem(LOCAL_STORAGE_PROFILE_KEY, JSON.stringify(updatedProfile));
-    setUserProfile(updatedProfile);
-    setIsPinLocked(false);
     return { success: true };
   };
 
@@ -232,10 +267,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!userProfile) return;
     const updated = { ...userProfile, currency: newCurrency };
     setUserProfile(updated);
-    if (isFirebaseConfigured && db && user) {
-      await setDoc(doc(db, 'users', user.uid), updated);
+    localStorage.setItem(`${LOCAL_STORAGE_PROFILE_KEY}_${userProfile.uid}`, JSON.stringify(updated));
+
+    if (db && user) {
+      try {
+        await setDoc(doc(db, 'users', user.uid), updated);
+      } catch (err) {
+        console.warn('Firestore currency sync error:', err);
+      }
     }
-    localStorage.setItem(LOCAL_STORAGE_PROFILE_KEY, JSON.stringify(updated));
   };
 
   const updateMonthlyBudget = async (mode: ExpenseMode, amount: number) => {
@@ -248,38 +288,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       },
     };
     setUserProfile(updated);
-    if (isFirebaseConfigured && db && user) {
-      await setDoc(doc(db, 'users', user.uid), updated);
+    localStorage.setItem(`${LOCAL_STORAGE_PROFILE_KEY}_${userProfile.uid}`, JSON.stringify(updated));
+
+    if (db && user) {
+      try {
+        await setDoc(doc(db, 'users', user.uid), updated);
+      } catch (err) {
+        console.warn('Firestore budget sync error:', err);
+      }
     }
-    localStorage.setItem(LOCAL_STORAGE_PROFILE_KEY, JSON.stringify(updated));
-  };
-
-  const enableDemoMode = async () => {
-    const demoUser = { uid: 'demo-user-keep', email: 'demo@femspen.app' };
-    const salt = generateSalt();
-    const pinHash = await hashString('1234', salt);
-    const ansSalt = generateSalt();
-    const ansHash = await hashString('Blue', ansSalt);
-
-    const demoProfile: UserProfile = {
-      uid: demoUser.uid,
-      email: demoUser.email,
-      pinHash,
-      pinSalt: salt,
-      securityQuestion: 'What is your favorite color?',
-      securityAnswerHash: `${ansHash}:${ansSalt}`,
-      currency: 'USD',
-      monthlyBudget: {
-        individual: 1200,
-        family: 3800,
-      },
-      createdAt: Date.now(),
-    };
-
-    localStorage.setItem(LOCAL_STORAGE_PROFILE_KEY, JSON.stringify(demoProfile));
-    setUser(demoUser);
-    setUserProfile(demoProfile);
-    setIsPinLocked(false);
   };
 
   return (
@@ -300,7 +317,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         lockSession,
         updateCurrency,
         updateMonthlyBudget,
-        enableDemoMode,
       }}
     >
       {children}

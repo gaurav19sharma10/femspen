@@ -177,21 +177,26 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
             </div>
           </div>
 
-          <div className="bg-blue-50/50 p-4 rounded-2xl border border-blue-100">
+          <div className="bg-blue-50/70 p-4 rounded-2xl border border-blue-100">
             <span className="block text-xs font-bold text-[#0057FF] mb-1 flex items-center gap-1.5">
               <Flame size={14} />
-              <span>Firebase Cloud Sync</span>
+              <span>Firebase Cloud Sync Status</span>
             </span>
-            <p className="text-[11px] text-gray-600 mb-2">
-              To link your own Firebase project, you can paste your Firebase SDK config object JSON below or set it in `.env`.
+            <p className="text-[11px] text-gray-600 mb-2.5">
+              Connected to project: <span className="font-mono font-bold text-gray-800">femspen-bee68</span>.
+              If you experience permission notices, copy the recommended security rules below and publish them in your Firebase Console:
             </p>
-            <textarea
-              rows={2}
-              value={firebaseConfigJson}
-              onChange={(e) => setFirebaseConfigJson(e.target.value)}
-              placeholder='{ "apiKey": "AIzaSy...", "projectId": "my-app" }'
-              className="w-full bg-white p-2.5 rounded-xl text-[11px] font-mono border border-gray-200 focus:outline-none"
-            />
+            <button
+              type="button"
+              onClick={() => {
+                const rules = `rules_version = '2';\nservice cloud.firestore {\n  match /databases/{database}/documents {\n    match /{document=**} {\n      allow read, write: if request.auth != null;\n    }\n  }\n}`;
+                navigator.clipboard.writeText(rules);
+                alert('Copied Firestore Security Rules to clipboard! Paste and Publish them in Firebase Console > Firestore Database > Rules tab.');
+              }}
+              className="px-3.5 py-1.5 bg-[#0057FF] hover:bg-[#0046D1] text-white text-xs font-bold rounded-xl cursor-pointer transition-colors shadow-xs"
+            >
+              Copy Recommended Firestore Rules
+            </button>
           </div>
 
           <button

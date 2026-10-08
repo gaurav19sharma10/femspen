@@ -13,7 +13,6 @@ import {
 import { db, isFirebaseConfigured } from '../lib/firebase';
 import { useAuth } from './AuthContext';
 import { Expense, ExpenseMode, DateGroup } from '../types';
-import { INITIAL_DEMO_EXPENSES } from '../lib/seedData';
 
 interface ExpenseContextType {
   expenses: Expense[];
@@ -27,6 +26,7 @@ interface ExpenseContextType {
   selectedColor: string | null;
   setSelectedColor: (color: string | null) => void;
   loading: boolean;
+  isRulesLocked: boolean;
   addExpense: (expense: Omit<Expense, 'id' | 'createdAt' | 'updatedAt'>) => Promise<string>;
   updateExpense: (id: string, updates: Partial<Expense>) => Promise<void>;
   deleteExpense: (id: string) => Promise<void>;
@@ -42,7 +42,17 @@ interface ExpenseContextType {
 
 const ExpenseContext = createContext<ExpenseContextType | undefined>(undefined);
 
-const LOCAL_STORAGE_EXPENSES_KEY = 'EXPENSE_TRACKER_LOCAL_EXPENSES';
+const LOCAL_STORAGE_EXPENSES_KEY = 'FEMSPEN_EXPENSES';
+
+const sanitizeForFirestore = (obj: Record<string, any>): Record<string, any> => {
+  const clean: Record<string, any> = {};
+  Object.entries(obj).forEach(([key, val]) => {
+    if (val !== undefined) {
+      clean[key] = val;
+    }
+  });
+  return clean;
+};
 
 export const ExpenseProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, userProfile } = useAuth();
@@ -52,7 +62,9 @@ export const ExpenseProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedColor, setSelectedColor] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isRulesLocked, setIsRulesLocked] = useState(false);
 
+  // Load and listen to user's real Firestore expenses
   useEffect(() => {
     if (!user) {
       setExpenses([]);
@@ -60,13 +72,25 @@ export const ExpenseProvider: React.FC<{ children: React.ReactNode }> = ({ child
       return;
     }
 
+    const storageKey = `${LOCAL_STORAGE_EXPENSES_KEY}_${user.uid}`;
+    // Load local cached expenses for instant render
+    const cached = localStorage.getItem(storageKey);
+    if (cached) {
+      try {
+        setExpenses(JSON.parse(cached));
+      } catch {
+        // ignore
+      }
+    }
+
     if (isFirebaseConfigured && db) {
       const expensesRef = collection(db, 'users', user.uid, 'expenses');
-      const q = query(expensesRef, orderBy('createdAt', 'desc'));
+      let q = query(expensesRef, orderBy('createdAt', 'desc'));
 
       const unsubscribe = onSnapshot(
         q,
         (snapshot) => {
+          setIsRulesLocked(false);
           const fetched: Expense[] = snapshot.docs.map((docSnap) => {
             const data = docSnap.data();
             return {
@@ -88,91 +112,122 @@ export const ExpenseProvider: React.FC<{ children: React.ReactNode }> = ({ child
               updatedAt: data.updatedAt?.toMillis ? data.updatedAt.toMillis() : (data.updatedAt || Date.now()),
             };
           });
+
           setExpenses(fetched);
+          localStorage.setItem(storageKey, JSON.stringify(fetched));
           setLoading(false);
         },
         (error) => {
-          console.warn('Firestore snapshot error, falling back to local storage:', error);
-          loadLocalExpenses();
+          console.warn('Firestore live listener notice (offline or rules):', error.message);
+          if (error.code === 'permission-denied' || error.message.includes('permission')) {
+            setIsRulesLocked(true);
+          }
+          setLoading(false);
         }
       );
 
       return () => unsubscribe();
     } else {
-      loadLocalExpenses();
+      setLoading(false);
     }
   }, [user, userProfile?.currency]);
 
-  const loadLocalExpenses = () => {
-    const saved = localStorage.getItem(LOCAL_STORAGE_EXPENSES_KEY);
-    if (saved) {
-      try {
-        setExpenses(JSON.parse(saved));
-      } catch {
-        setExpenses(INITIAL_DEMO_EXPENSES);
-      }
-    } else {
-      setExpenses(INITIAL_DEMO_EXPENSES);
-      localStorage.setItem(LOCAL_STORAGE_EXPENSES_KEY, JSON.stringify(INITIAL_DEMO_EXPENSES));
-    }
-    setLoading(false);
-  };
-
-  const persistLocal = (updated: Expense[]) => {
+  const persistExpensesLocally = (updated: Expense[]) => {
+    if (!user) return;
+    const storageKey = `${LOCAL_STORAGE_EXPENSES_KEY}_${user.uid}`;
     setExpenses(updated);
-    localStorage.setItem(LOCAL_STORAGE_EXPENSES_KEY, JSON.stringify(updated));
+    localStorage.setItem(storageKey, JSON.stringify(updated));
   };
 
   const addExpense = async (data: Omit<Expense, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> => {
     const now = Date.now();
-    const newExpensePayload = {
+    const tempId = 'exp_' + Math.random().toString(36).substring(2, 10);
+    const newExpense: Expense = {
       ...data,
+      id: tempId,
       mode: currentMode,
       currency: data.currency || userProfile?.currency || 'USD',
       createdAt: now,
       updatedAt: now,
     };
 
+    // Optimistically update local state & cache
+    const updated = [newExpense, ...expenses];
+    persistExpensesLocally(updated);
+
+    // Sync to Firestore
     if (isFirebaseConfigured && db && user) {
-      const expensesRef = collection(db, 'users', user.uid, 'expenses');
-      const docRef = await addDoc(expensesRef, {
-        ...newExpensePayload,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
-      return docRef.id;
-    } else {
-      const id = 'exp-' + Math.random().toString(36).substring(2, 9);
-      const newExp: Expense = { ...newExpensePayload, id };
-      const updated = [newExp, ...expenses];
-      persistLocal(updated);
-      return id;
+      try {
+        const expensesRef = collection(db, 'users', user.uid, 'expenses');
+        const payload = sanitizeForFirestore({
+          title: data.title,
+          amount: data.amount,
+          category: data.category,
+          mode: currentMode,
+          color: data.color,
+          isPinned: Boolean(data.isPinned),
+          date: data.date,
+          notes: data.notes || '',
+          familyMember: data.familyMember,
+          isRecurring: Boolean(data.isRecurring),
+          recurringInterval: data.recurringInterval,
+          receiptUrl: data.receiptUrl,
+          currency: data.currency || userProfile?.currency || 'USD',
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+
+        const docRef = await addDoc(expensesRef, payload);
+        // Replace temp ID with real Firestore doc ID
+        const withRealId = updated.map((e) => (e.id === tempId ? { ...e, id: docRef.id } : e));
+        persistExpensesLocally(withRealId);
+        setIsRulesLocked(false);
+        return docRef.id;
+      } catch (err: any) {
+        console.warn('Note: Expense saved to offline storage. Cloud sync notice:', err.message);
+        if (err.code === 'permission-denied' || err.message?.includes('permission')) {
+          setIsRulesLocked(true);
+        }
+      }
     }
+
+    return tempId;
   };
 
   const updateExpense = async (id: string, updates: Partial<Expense>): Promise<void> => {
     const now = Date.now();
+    const updated = expenses.map((e) => (e.id === id ? { ...e, ...updates, updatedAt: now } : e));
+    persistExpensesLocally(updated);
+
     if (isFirebaseConfigured && db && user) {
-      const docRef = doc(db, 'users', user.uid, 'expenses', id);
-      await updateDoc(docRef, {
-        ...updates,
-        updatedAt: serverTimestamp(),
-      });
-    } else {
-      const updated = expenses.map((e) =>
-        e.id === id ? { ...e, ...updates, updatedAt: now } : e
-      );
-      persistLocal(updated);
+      try {
+        const expenseDocRef = doc(db, 'users', user.uid, 'expenses', id);
+        const cleanUpdates = sanitizeForFirestore({
+          ...updates,
+          updatedAt: serverTimestamp(),
+        });
+        await updateDoc(expenseDocRef, cleanUpdates);
+        setIsRulesLocked(false);
+      } catch (err: any) {
+        console.warn('Note: Expense updated locally. Cloud sync notice:', err.message);
+        if (err.code === 'permission-denied' || err.message?.includes('permission')) {
+          setIsRulesLocked(true);
+        }
+      }
     }
   };
 
   const deleteExpense = async (id: string): Promise<void> => {
+    const updated = expenses.filter((e) => e.id !== id);
+    persistExpensesLocally(updated);
+
     if (isFirebaseConfigured && db && user) {
-      const docRef = doc(db, 'users', user.uid, 'expenses', id);
-      await deleteDoc(docRef);
-    } else {
-      const updated = expenses.filter((e) => e.id !== id);
-      persistLocal(updated);
+      try {
+        const expenseDocRef = doc(db, 'users', user.uid, 'expenses', id);
+        await deleteDoc(expenseDocRef);
+      } catch (err: any) {
+        console.warn('Note: Expense deleted locally. Cloud sync notice:', err.message);
+      }
     }
   };
 
@@ -182,115 +237,102 @@ export const ExpenseProvider: React.FC<{ children: React.ReactNode }> = ({ child
     await updateExpense(id, { isPinned: !target.isPinned });
   };
 
+  // Filter expenses by mode, category, color, and search
   const filteredExpenses = useMemo(() => {
     return expenses.filter((e) => {
       if (e.mode !== currentMode) return false;
-
+      if (selectedCategory && e.category.toLowerCase() !== selectedCategory.toLowerCase()) return false;
+      if (selectedColor && e.color.toLowerCase() !== selectedColor.toLowerCase()) return false;
       if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
+        const q = searchQuery.toLowerCase().trim();
         const matchesTitle = e.title.toLowerCase().includes(q);
-        const matchesNotes = e.notes?.toLowerCase().includes(q) || false;
+        const matchesNotes = (e.notes || '').toLowerCase().includes(q);
         const matchesCat = e.category.toLowerCase().includes(q);
-        const matchesAmount = e.amount.toString().includes(q);
-        const matchesMember = e.familyMember?.toLowerCase().includes(q) || false;
-        if (!matchesTitle && !matchesNotes && !matchesCat && !matchesAmount && !matchesMember) {
-          return false;
-        }
+        const matchesMember = (e.familyMember || '').toLowerCase().includes(q);
+        if (!matchesTitle && !matchesNotes && !matchesCat && !matchesMember) return false;
       }
-
-      if (selectedCategory && e.category !== selectedCategory) {
-        return false;
-      }
-
-      if (selectedColor && e.color !== selectedColor) {
-        return false;
-      }
-
       return true;
     });
-  }, [expenses, currentMode, searchQuery, selectedCategory, selectedColor]);
+  }, [expenses, currentMode, selectedCategory, selectedColor, searchQuery]);
 
+  // Group into Google Keep date buckets
   const dateGroups: DateGroup[] = useMemo(() => {
-    if (!filteredExpenses.length) return [];
-
     const now = new Date();
     const todayStr = now.toISOString().split('T')[0];
 
-    const yesterdayObj = new Date();
-    yesterdayObj.setDate(yesterdayObj.getDate() - 1);
-    const yesterdayStr = yesterdayObj.toISOString().split('T')[0];
+    const yesterday = new Date(now);
+    yesterday.setDate(now.getDate() - 1);
+    const yesterdayStr = yesterday.toISOString().split('T')[0];
 
-    const sevenDaysAgo = new Date();
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    const oneWeekAgo = new Date(now);
+    oneWeekAgo.setDate(now.getDate() - 7);
 
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-    const groups: { [key: string]: { title: string; order: number; dateStr: string; expenses: Expense[] } } = {
-      today: { title: 'Today', order: 1, dateStr: todayStr, expenses: [] },
-      yesterday: { title: 'Yesterday', order: 2, dateStr: yesterdayStr, expenses: [] },
-      thisWeek: { title: 'Earlier This Week', order: 3, dateStr: '', expenses: [] },
-      thisMonth: { title: 'This Month', order: 4, dateStr: '', expenses: [] },
-      older: { title: 'Older', order: 5, dateStr: '', expenses: [] },
-    };
+    const todayItems: Expense[] = [];
+    const yesterdayItems: Expense[] = [];
+    const weekItems: Expense[] = [];
+    const monthItems: Expense[] = [];
+    const earlierItems: Expense[] = [];
 
-    filteredExpenses.forEach((exp) => {
-      const expDate = exp.date ? new Date(exp.date) : new Date(exp.createdAt);
-      const expDateStr = exp.date || expDate.toISOString().split('T')[0];
+    filteredExpenses.forEach((item) => {
+      const itemDateStr = item.date;
+      const itemDate = new Date(itemDateStr);
 
-      if (expDateStr === todayStr) {
-        groups.today.expenses.push(exp);
-      } else if (expDateStr === yesterdayStr) {
-        groups.yesterday.expenses.push(exp);
-      } else if (expDate >= sevenDaysAgo) {
-        groups.thisWeek.expenses.push(exp);
-      } else if (expDate >= startOfMonth) {
-        groups.thisMonth.expenses.push(exp);
+      if (itemDateStr === todayStr) {
+        todayItems.push(item);
+      } else if (itemDateStr === yesterdayStr) {
+        yesterdayItems.push(item);
+      } else if (itemDate >= oneWeekAgo) {
+        weekItems.push(item);
+      } else if (itemDate >= firstDayOfMonth) {
+        monthItems.push(item);
       } else {
-        groups.older.expenses.push(exp);
+        earlierItems.push(item);
       }
     });
 
-    return Object.entries(groups)
-      .filter(([_, group]) => group.expenses.length > 0)
-      .sort((a, b) => a[1].order - b[1].order)
-      .map(([id, group]) => {
-        const total = group.expenses.reduce((sum, item) => sum + item.amount, 0);
-        return {
-          id,
-          title: group.title,
-          dateStr: group.dateStr,
-          totalAmount: total,
-          expenses: group.expenses,
-        };
-      });
+    const buildGroup = (id: string, title: string, items: Expense[]): DateGroup => ({
+      id,
+      title,
+      dateStr: items[0]?.date || '',
+      totalAmount: items.reduce((sum, item) => sum + item.amount, 0),
+      expenses: items,
+    });
+
+    const groups: DateGroup[] = [];
+    if (todayItems.length > 0) groups.push(buildGroup('today', 'Today', todayItems));
+    if (yesterdayItems.length > 0) groups.push(buildGroup('yesterday', 'Yesterday', yesterdayItems));
+    if (weekItems.length > 0) groups.push(buildGroup('week', 'Earlier This Week', weekItems));
+    if (monthItems.length > 0) groups.push(buildGroup('month', 'This Month', monthItems));
+    if (earlierItems.length > 0) groups.push(buildGroup('earlier', 'Earlier', earlierItems));
+
+    return groups;
   }, [filteredExpenses]);
 
+  // Financial Stats
   const stats = useMemo(() => {
-    const modeExpenses = expenses.filter((e) => e.mode === currentMode);
-    const totalSpend = modeExpenses.reduce((sum, e) => sum + e.amount, 0);
+    const currentModeExpenses = expenses.filter((e) => e.mode === currentMode);
+    const totalSpend = currentModeExpenses.reduce((acc, curr) => acc + curr.amount, 0);
 
     const now = new Date();
     const currentMonthPrefix = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-    const monthlyExpenses = modeExpenses.filter((e) => (e.date || '').startsWith(currentMonthPrefix));
-    const monthlySpend = monthlyExpenses.reduce((sum, e) => sum + e.amount, 0);
+    const monthlySpend = currentModeExpenses
+      .filter((e) => e.date.startsWith(currentMonthPrefix))
+      .reduce((acc, curr) => acc + curr.amount, 0);
 
-    const budgetLimit = currentMode === 'individual'
-      ? (userProfile?.monthlyBudget?.individual || 1500)
-      : (userProfile?.monthlyBudget?.family || 4500);
+    const budgetLimit = userProfile?.monthlyBudget?.[currentMode] || (currentMode === 'individual' ? 1500 : 4500);
+    const budgetPercentage = budgetLimit > 0 ? Math.min(100, Math.round((monthlySpend / budgetLimit) * 100)) : 0;
 
-    const budgetPercentage = budgetLimit > 0 ? Math.min(Math.round((monthlySpend / budgetLimit) * 100), 100) : 0;
-
-    const categoryTotals: { [key: string]: number } = {};
-    monthlyExpenses.forEach((e) => {
-      categoryTotals[e.category] = (categoryTotals[e.category] || 0) + e.amount;
+    const catMap: Record<string, number> = {};
+    currentModeExpenses.forEach((e) => {
+      catMap[e.category] = (catMap[e.category] || 0) + e.amount;
     });
 
-    let topCatName = 'None';
-    let topCatAmount = 0;
-    Object.entries(categoryTotals).forEach(([name, amt]) => {
-      if (amt > topCatAmount) {
-        topCatAmount = amt;
-        topCatName = name;
+    let topCategory = { name: 'None', amount: 0 };
+    Object.entries(catMap).forEach(([name, amount]) => {
+      if (amount > topCategory.amount) {
+        topCategory = { name, amount };
       }
     });
 
@@ -299,7 +341,7 @@ export const ExpenseProvider: React.FC<{ children: React.ReactNode }> = ({ child
       monthlySpend,
       budgetLimit,
       budgetPercentage,
-      topCategory: { name: topCatName, amount: topCatAmount },
+      topCategory,
     };
   }, [expenses, currentMode, userProfile]);
 
@@ -317,6 +359,7 @@ export const ExpenseProvider: React.FC<{ children: React.ReactNode }> = ({ child
         selectedColor,
         setSelectedColor,
         loading,
+        isRulesLocked,
         addExpense,
         updateExpense,
         deleteExpense,
@@ -329,8 +372,10 @@ export const ExpenseProvider: React.FC<{ children: React.ReactNode }> = ({ child
   );
 };
 
-export const useExpense = () => {
+export const useExpenses = () => {
   const context = useContext(ExpenseContext);
-  if (!context) throw new Error('useExpense must be used within an ExpenseProvider');
+  if (!context) throw new Error('useExpenses must be used within an ExpenseProvider');
   return context;
 };
+
+export const useExpense = useExpenses;

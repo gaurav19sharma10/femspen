@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { formatCurrency } from '../../utils/currency';
 import { exportExpensesToCSV } from '../../utils/export';
+import { FemSpenLogo } from '../common/VectorArt';
 
 interface KeepHeaderProps {
   onOpenAnalytics: () => void;
@@ -36,12 +37,10 @@ export const KeepHeader: React.FC<KeepHeaderProps> = ({
         {/* Brand Logo & Mode Pill Switcher */}
         <div className="flex items-center justify-between w-full md:w-auto gap-4">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-[#0057FF] flex items-center justify-center text-white font-black text-lg shadow-sm shadow-[#0057FF]/30">
-              F
-            </div>
+            <FemSpenLogo size={36} />
             <div>
-              <h1 className="text-base font-bold text-gray-900 leading-tight">FemSpen</h1>
-              <span className="text-[10px] font-medium text-gray-500 uppercase tracking-wider block">
+              <h1 className="text-base font-black text-gray-900 leading-tight">FemSpen</h1>
+              <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider block">
                 Real-time Ledger
               </span>
             </div>

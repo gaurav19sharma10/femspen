@@ -1,6 +1,7 @@
 package com.expensetracker
 
 import android.os.Bundle
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.*
@@ -15,92 +16,129 @@ import com.expensetracker.ui.auth.PinLockScreen
 import com.expensetracker.ui.editor.ExpenseEditorSheet
 import com.expensetracker.ui.feed.KeepFeedScreen
 import com.expensetracker.ui.theme.ExpenseTrackerTheme
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FieldValue
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.ListenerRegistration
+import com.google.firebase.firestore.Query
+import java.text.SimpleDateFormat
+import java.util.*
 
 class MainActivity : FragmentActivity() {
+    private val auth by lazy { FirebaseAuth.getInstance() }
+    private val db by lazy { FirebaseFirestore.getInstance() }
+    private var firestoreListener: ListenerRegistration? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         setContent {
             ExpenseTrackerTheme {
-                var isAuthenticated by remember { mutableStateOf(false) }
+                var isAuthenticated by remember { mutableStateOf(auth.currentUser != null) }
                 var isPinLocked by remember { mutableStateOf(true) }
-                var userEmail by remember { mutableStateOf("demo@expensetracker.app") }
+                var userEmail by remember { mutableStateOf(auth.currentUser?.email ?: "") }
                 var currentMode by remember { mutableStateOf(ExpenseMode.INDIVIDUAL) }
 
+                var allExpenses by remember { mutableStateOf<List<Expense>>(emptyList()) }
                 var editingExpense by remember { mutableStateOf<Expense?>(null) }
                 var isEditorOpen by remember { mutableStateOf(false) }
                 var isAnalyticsOpen by remember { mutableStateOf(false) }
 
-                // Seed data for instant preview
-                var allExpenses by remember {
-                    mutableStateOf(
-                        listOf(
-                            Expense(
-                                id = "1",
-                                title = "Morning Artisan Coffee & Croissant",
-                                amount = 8.50,
-                                category = "Food",
-                                mode = ExpenseMode.INDIVIDUAL.name,
-                                color = "#FFE0B2",
-                                isPinned = true,
-                                date = "Today",
-                                notes = "Espresso bar before deep work sprint"
-                            ),
-                            Expense(
-                                id = "2",
-                                title = "Uber Ride to Tech Center",
-                                amount = 19.20,
-                                category = "Transport",
-                                mode = ExpenseMode.INDIVIDUAL.name,
-                                color = "#BBDEFB",
-                                isPinned = false,
-                                date = "Today"
-                            ),
-                            Expense(
-                                id = "3",
-                                title = "High-speed Fiber Internet",
-                                amount = 69.99,
-                                category = "Bills",
-                                mode = ExpenseMode.FAMILY.name,
-                                color = "#DCEDC8",
-                                isPinned = true,
-                                familyMember = "Dad",
-                                isRecurring = true,
-                                recurringInterval = "Monthly",
-                                date = "Yesterday"
-                            ),
-                            Expense(
-                                id = "4",
-                                title = "Weekly Supermarket & Groceries",
-                                amount = 142.80,
-                                category = "Food",
-                                mode = ExpenseMode.FAMILY.name,
-                                color = "#C8E6C9",
-                                isPinned = false,
-                                familyMember = "Shared",
-                                date = "Today",
-                                notes = "Pantry items, produce, and fresh milk"
-                            )
+                // Attach real Firestore listener when authenticated
+                LaunchedEffect(isAuthenticated) {
+                    val uid = auth.currentUser?.uid
+                    firestoreListener?.remove()
+
+                    if (isAuthenticated && uid != null) {
+                        try {
+                            firestoreListener = db.collection("users")
+                                .document(uid)
+                                .collection("expenses")
+                                .orderBy("createdAt", Query.Direction.DESCENDING)
+                                .addSnapshotListener { snapshot, error ->
+                                    if (error != null) {
+                                        Log.w("FemSpen", "Firestore real-time listener notice: ${error.message}")
+                                        return@addSnapshotListener
+                                    }
+                                    if (snapshot != null) {
+                                        val list = snapshot.documents.mapNotNull { doc ->
+                                            val title = doc.getString("title") ?: ""
+                                            val amount = doc.getDouble("amount") ?: 0.0
+                                            val category = doc.getString("category") ?: "General"
+                                            val mode = doc.getString("mode") ?: ExpenseMode.INDIVIDUAL.name
+                                            val color = doc.getString("color") ?: "#F8F7F4"
+                                            val isPinned = doc.getBoolean("isPinned") ?: false
+                                            val date = doc.getString("date") ?: "Today"
+                                            val notes = doc.getString("notes") ?: ""
+                                            val familyMember = doc.getString("familyMember")
+                                            val isRecurring = doc.getBoolean("isRecurring") ?: false
+                                            val recurringInterval = doc.getString("recurringInterval")
+
+                                            Expense(
+                                                id = doc.id,
+                                                title = title,
+                                                amount = amount,
+                                                category = category,
+                                                mode = mode.uppercase(),
+                                                color = color,
+                                                isPinned = isPinned,
+                                                date = date,
+                                                notes = notes,
+                                                familyMember = familyMember,
+                                                isRecurring = isRecurring,
+                                                recurringInterval = recurringInterval
+                                            )
+                                        }
+                                        allExpenses = list
+                                    }
+                                }
+                        } catch (e: Exception) {
+                            Log.e("FemSpen", "Error initializing firestore listener", e)
+                        }
+                    } else {
+                        allExpenses = emptyList()
+                    }
+                }
+
+                val currentExpenses = allExpenses.filter {
+                    it.mode.equals(currentMode.name, ignoreCase = true)
+                }
+                val pinnedExpenses = currentExpenses.filter { it.isPinned }
+
+                // Group into Google Keep date buckets
+                val todayStr = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+                val todayExpenses = currentExpenses.filter { it.date == "Today" || it.date == todayStr }
+                val yesterdayExpenses = currentExpenses.filter { it.date == "Yesterday" }
+                val otherExpenses = currentExpenses.filter { it !in todayExpenses && it !in yesterdayExpenses }
+
+                val dateGroups = mutableListOf<DateGroup>()
+                if (todayExpenses.isNotEmpty()) {
+                    dateGroups.add(
+                        DateGroup(
+                            title = "Today",
+                            totalAmount = todayExpenses.filter { !it.isPinned }.sumOf { it.amount },
+                            expenses = todayExpenses
                         )
                     )
                 }
-
-                val currentExpenses = allExpenses.filter { it.mode == currentMode.name }
-                val pinnedExpenses = currentExpenses.filter { it.isPinned }
-
-                // Compute simple DateGroups
-                val dateGroups = listOf(
-                    DateGroup(
-                        title = "Today",
-                        totalAmount = currentExpenses.filter { it.date == "Today" && !it.isPinned }.sumOf { it.amount },
-                        expenses = currentExpenses.filter { it.date == "Today" }
-                    ),
-                    DateGroup(
-                        title = "Yesterday",
-                        totalAmount = currentExpenses.filter { it.date == "Yesterday" && !it.isPinned }.sumOf { it.amount },
-                        expenses = currentExpenses.filter { it.date == "Yesterday" }
+                if (yesterdayExpenses.isNotEmpty()) {
+                    dateGroups.add(
+                        DateGroup(
+                            title = "Yesterday",
+                            totalAmount = yesterdayExpenses.filter { !it.isPinned }.sumOf { it.amount },
+                            expenses = yesterdayExpenses
+                        )
                     )
-                )
+                }
+                if (otherExpenses.isNotEmpty()) {
+                    dateGroups.add(
+                        DateGroup(
+                            title = "Earlier",
+                            totalAmount = otherExpenses.filter { !it.isPinned }.sumOf { it.amount },
+                            expenses = otherExpenses
+                        )
+                    )
+                }
 
                 fun requestBiometrics() {
                     if (BiometricAuthHelper.canAuthenticate(this@MainActivity)) {
@@ -115,20 +153,17 @@ class MainActivity : FragmentActivity() {
                             }
                         )
                     } else {
-                        Toast.makeText(this@MainActivity, "Biometrics not enrolled. Use PIN 1234.", Toast.LENGTH_LONG).show()
+                        Toast.makeText(this@MainActivity, "Biometrics not available. Enter PIN to unlock.", Toast.LENGTH_SHORT).show()
                     }
                 }
 
                 when {
                     !isAuthenticated -> {
                         LoginScreen(
-                            onLoginSuccess = {
+                            onAuthSuccess = { email, _ ->
+                                userEmail = email
                                 isAuthenticated = true
                                 isPinLocked = true
-                            },
-                            onDemoLogin = {
-                                isAuthenticated = true
-                                isPinLocked = false
                             }
                         )
                     }
@@ -138,7 +173,7 @@ class MainActivity : FragmentActivity() {
                             onPinSuccess = { isPinLocked = false },
                             onBiometricRequest = { requestBiometrics() },
                             onForgotPin = {
-                                Toast.makeText(this@MainActivity, "Recovery: Answer security question to reset PIN", Toast.LENGTH_LONG).show()
+                                Toast.makeText(this@MainActivity, "Use your secret security question to reset PIN", Toast.LENGTH_LONG).show()
                             }
                         )
                     }
@@ -164,8 +199,11 @@ class MainActivity : FragmentActivity() {
                                 isEditorOpen = true
                             },
                             onTogglePin = { exp ->
-                                allExpenses = allExpenses.map {
-                                    if (it.id == exp.id) it.copy(isPinned = !it.isPinned) else it
+                                val uid = auth.currentUser?.uid
+                                if (uid != null) {
+                                    db.collection("users").document(uid).collection("expenses")
+                                        .document(exp.id)
+                                        .update("isPinned", !exp.isPinned)
                                 }
                             },
                             onLockSession = { isPinLocked = true },
@@ -178,16 +216,39 @@ class MainActivity : FragmentActivity() {
                                 currentMode = currentMode,
                                 onDismiss = { isEditorOpen = false },
                                 onSave = { saved ->
-                                    if (editingExpense == null) {
-                                        val newId = System.currentTimeMillis().toString()
-                                        allExpenses = listOf(saved.copy(id = newId)) + allExpenses
-                                    } else {
-                                        allExpenses = allExpenses.map { if (it.id == saved.id) saved else it }
+                                    val uid = auth.currentUser?.uid
+                                    if (uid != null) {
+                                        val data = hashMapOf(
+                                            "title" to saved.title,
+                                            "amount" to saved.amount,
+                                            "category" to saved.category,
+                                            "mode" to currentMode.name.lowercase(),
+                                            "color" to saved.color,
+                                            "isPinned" to saved.isPinned,
+                                            "date" to if (saved.date.isBlank()) "Today" else saved.date,
+                                            "notes" to saved.notes,
+                                            "familyMember" to saved.familyMember,
+                                            "isRecurring" to saved.isRecurring,
+                                            "recurringInterval" to saved.recurringInterval,
+                                            "updatedAt" to FieldValue.serverTimestamp()
+                                        )
+
+                                        if (editingExpense == null) {
+                                            data["createdAt"] = FieldValue.serverTimestamp()
+                                            db.collection("users").document(uid).collection("expenses").add(data)
+                                        } else {
+                                            db.collection("users").document(uid).collection("expenses")
+                                                .document(saved.id).update(data as Map<String, Any>)
+                                        }
                                     }
                                     isEditorOpen = false
                                 },
                                 onDelete = { id ->
-                                    allExpenses = allExpenses.filter { it.id != id }
+                                    val uid = auth.currentUser?.uid
+                                    if (uid != null) {
+                                        db.collection("users").document(uid).collection("expenses")
+                                            .document(id).delete()
+                                    }
                                     isEditorOpen = false
                                 }
                             )
@@ -196,5 +257,10 @@ class MainActivity : FragmentActivity() {
                 }
             }
         }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        firestoreListener?.remove()
     }
 }

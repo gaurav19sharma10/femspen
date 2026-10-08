@@ -3,7 +3,7 @@ import { Expense } from '../../types';
 import { useExpense } from '../../context/ExpenseContext';
 import { useAuth } from '../../context/AuthContext';
 import { ExpenseCard } from './ExpenseCard';
-import { EmptyFeedArt } from '../common/VectorArt';
+import { FemSpenEmptyFeedArt, FemSpenFamilyArt } from '../common/VectorArt';
 import { formatCurrency } from '../../utils/currency';
 import { Pin, Plus, Receipt } from 'lucide-react';
 
@@ -55,16 +55,22 @@ export const DateGroupFeed: React.FC<DateGroupFeedProps> = ({
       {/* Empty State Artwork */}
       {!hasExpenses && (
         <div className="flex flex-col items-center justify-center py-16 text-center">
-          <EmptyFeedArt size={170} className="mb-4" />
-          <h3 className="text-base font-bold text-gray-800">
+          {currentMode === 'family' ? (
+            <FemSpenFamilyArt size={170} className="mb-4" />
+          ) : (
+            <FemSpenEmptyFeedArt size={170} className="mb-4" />
+          )}
+          <h3 className="text-base font-bold text-gray-800 capitalize">
             No {currentMode} expenses recorded
           </h3>
           <p className="text-xs text-gray-500 max-w-xs mt-1">
-            Keep track of your daily coffee, utility bills, or household groceries by recording an expense card.
+            {currentMode === 'family'
+              ? 'Start tracking household bills, shared groceries, and family allowances in real-time.'
+              : 'Keep track of your daily coffee, utility bills, or personal savings by recording an expense card.'}
           </p>
           <button
             onClick={onOpenNew}
-            className="mt-4 px-4 py-2 bg-[#0057FF] text-white text-xs font-semibold rounded-xl flex items-center gap-1.5 shadow-md shadow-[#0057FF]/20 hover:bg-[#0046D1] cursor-pointer transition-all"
+            className="mt-4 px-4 py-2 bg-[#0057FF] text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-md shadow-[#0057FF]/20 hover:bg-[#0046D1] cursor-pointer transition-all"
           >
             <Plus size={15} />
             <span>Record First Expense</span>
@@ -103,7 +109,7 @@ export const DateGroupFeed: React.FC<DateGroupFeedProps> = ({
         const groupSpend = unpinnedInGroup.reduce((sum, e) => sum + e.amount, 0);
 
         return (
-          <section key={group.id} className="space-y-3">
+          <section key={group.title} className="space-y-3">
             <div className="flex items-baseline justify-between px-1 border-b border-gray-200/50 pb-1.5">
               <h2 className="text-xs font-bold uppercase tracking-wider text-gray-600 flex items-center gap-2">
                 <span>{group.title}</span>

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useAuth } from '../../context/AuthContext';
-import { KeepVaultArt } from '../common/VectorArt';
+import { FemSpenVaultArt } from '../common/VectorArt';
 import { Delete, Fingerprint, LogOut, HelpCircle } from 'lucide-react';
 import { ForgotPinModal } from './ForgotPinModal';
 
@@ -45,7 +45,7 @@ export const PinLockScreen: React.FC = () => {
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 0.25 }}
-        className="w-full max-w-sm bg-white rounded-3xl border border-gray-200/80 shadow-xl p-8 flex flex-col items-center"
+        className="w-full max-w-sm bg-white rounded-3xl border border-gray-200/80 shadow-2xl p-8 flex flex-col items-center"
       >
         {/* Animated Vault Vector Artwork */}
         <motion.div
@@ -53,7 +53,7 @@ export const PinLockScreen: React.FC = () => {
           transition={{ duration: 0.4 }}
           className="mb-2"
         >
-          <KeepVaultArt size={110} />
+          <FemSpenVaultArt size={110} />
         </motion.div>
 
         <h2 className="text-xl font-bold text-gray-900 mt-1">2FA Security Lock</h2>
