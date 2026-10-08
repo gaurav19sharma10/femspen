@@ -1,0 +1,19 @@
+# Build & Dependencies
+.gradle/
+build/
+app/build/
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/.idea/
+android/*.iml
+
+web/node_modules/
+web/dist/
+web/.env
+
+# Temporary & Logs
+*.log
+.DS_Store
+Thumbs.db

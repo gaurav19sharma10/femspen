@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Primary Brand Palette -->
+    <color name="primary">#0057FF</color>
+    <color name="primary_variant">#0042C7</color>
+    <color name="on_primary">#FFFFFF</color>
+    <color name="background_chalk">#F8F7F4</color>
+    <color name="surface_chalk">#FFFFFF</color>
+    <color name="text_main">#1F2937</color>
+    <color name="text_secondary">#6B7280</color>
+
+    <!-- Google Keep Pastel Card Tints -->
+    <color name="keep_chalk">#F8F7F4</color>
+    <color name="keep_peach">#FFE0B2</color>
+    <color name="keep_mint">#C8E6C9</color>
+    <color name="keep_sky">#BBDEFB</color>
+    <color name="keep_lemon">#FFF9C4</color>
+    <color name="keep_lavender">#E1BEE7</color>
+    <color name="keep_coral">#FFCDD2</color>
+    <color name="keep_sage">#DCEDC8</color>
+</resources>
