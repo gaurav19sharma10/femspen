@@ -1,0 +1,17 @@
+{
+  "name": "Keep Expenses",
+  "short_name": "KeepExpenses",
+  "description": "Google Keep-style Real-time Expense Tracker",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F8F7F4",
+  "theme_color": "#0057FF",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
