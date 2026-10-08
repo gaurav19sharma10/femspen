@@ -11,33 +11,61 @@ export const PinLockScreen: React.FC = () => {
   const [error, setError] = useState(false);
   const [showForgotModal, setShowForgotModal] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
+  const isVerifyingRef = React.useRef(false);
+  isVerifyingRef.current = isVerifying;
 
-  const handleKeyPress = async (digit: string) => {
-    if (pin.length >= 4 || isVerifying) return;
-    const newPin = pin + digit;
-    setPin(newPin);
-    setError(false);
-
-    if (newPin.length === 4) {
-      setIsVerifying(true);
-      const success = await unlockWithPin(newPin);
-      if (!success) {
-        setError(true);
-        setTimeout(() => {
-          setPin('');
-          setIsVerifying(false);
-        }, 500);
-      } else {
-        setIsVerifying(false);
+  const handleKeyPress = React.useCallback(async (digit: string) => {
+    if (isVerifyingRef.current) return;
+    setPin((prev) => {
+      if (prev.length >= 4) return prev;
+      const nextPin = prev + digit;
+      if (nextPin.length === 4) {
+        setIsVerifying(true);
+        unlockWithPin(nextPin).then((success) => {
+          if (!success) {
+            setError(true);
+            setTimeout(() => {
+              setPin('');
+              setIsVerifying(false);
+            }, 500);
+          } else {
+            setIsVerifying(false);
+          }
+        });
       }
-    }
-  };
-
-  const handleDelete = () => {
-    if (isVerifying) return;
-    setPin(prev => prev.slice(0, -1));
+      return nextPin;
+    });
     setError(false);
-  };
+  }, [unlockWithPin]);
+
+  const handleDelete = React.useCallback(() => {
+    if (isVerifyingRef.current) return;
+    setPin((prev) => prev.slice(0, -1));
+    setError(false);
+  }, []);
+
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (showForgotModal) return;
+
+      if (e.key >= '0' && e.key <= '9') {
+        e.preventDefault();
+        handleKeyPress(e.key);
+      } else if (e.key === 'Backspace' || e.key === 'Delete') {
+        e.preventDefault();
+        handleDelete();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        if (!isVerifyingRef.current) {
+          setPin('');
+          setError(false);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [showForgotModal, handleKeyPress, handleDelete]);
 
   return (
     <div className="min-h-screen bg-[#F8F7F4] flex flex-col justify-center items-center p-4 select-none">
@@ -127,6 +155,12 @@ export const PinLockScreen: React.FC = () => {
           >
             <Delete size={20} />
           </motion.button>
+        </div>
+
+        {/* Desktop Keyboard Support Hint */}
+        <div className="flex items-center gap-1.5 text-[11px] text-gray-400 mt-2 select-none">
+          <span className="inline-block px-1.5 py-0.5 rounded border border-gray-200 bg-gray-50 text-[10px] font-mono text-gray-600 font-semibold shadow-2xs">0-9</span>
+          <span>Keyboard enabled for desktop</span>
         </div>
 
         {/* Footer Actions: Forgot PIN & Sign Out */}

@@ -55,7 +55,7 @@ export const ExpenseCard: React.FC<ExpenseCardProps> = ({ expense, onEdit }) => 
           {expense.title}
         </h3>
         <p className="text-xl font-bold text-gray-900 tracking-tight mt-1 font-mono">
-          {formatCurrency(expense.amount, expense.currency || userProfile?.currency)}
+          {formatCurrency(expense.amount, userProfile?.currency || expense.currency || 'INR')}
         </p>
       </div>
 

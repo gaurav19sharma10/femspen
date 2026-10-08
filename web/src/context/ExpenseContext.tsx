@@ -97,7 +97,7 @@ export const ExpenseProvider: React.FC<{ children: React.ReactNode }> = ({ child
               id: docSnap.id,
               title: data.title || '',
               amount: Number(data.amount) || 0,
-              currency: data.currency || userProfile?.currency || 'USD',
+              currency: data.currency || userProfile?.currency || 'INR',
               category: data.category || 'General',
               mode: data.mode || 'individual',
               color: data.color || '#F8F7F4',
@@ -146,7 +146,7 @@ export const ExpenseProvider: React.FC<{ children: React.ReactNode }> = ({ child
       ...data,
       id: tempId,
       mode: currentMode,
-      currency: data.currency || userProfile?.currency || 'USD',
+      currency: data.currency || userProfile?.currency || 'INR',
       createdAt: now,
       updatedAt: now,
     };
@@ -172,7 +172,7 @@ export const ExpenseProvider: React.FC<{ children: React.ReactNode }> = ({ child
           isRecurring: Boolean(data.isRecurring),
           recurringInterval: data.recurringInterval,
           receiptUrl: data.receiptUrl,
-          currency: data.currency || userProfile?.currency || 'USD',
+          currency: data.currency || userProfile?.currency || 'INR',
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
         });

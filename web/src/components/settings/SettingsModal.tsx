@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useAuth } from '../../context/AuthContext';
 import { useExpense } from '../../context/ExpenseContext';
@@ -9,7 +9,6 @@ import {
   Settings,
   DollarSign,
   Wallet,
-  Flame,
   Download,
   LogOut,
   CheckCircle2,
@@ -23,31 +22,37 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
   const { user, userProfile, updateCurrency, updateMonthlyBudget, logout } = useAuth();
   const { expenses } = useExpense();
 
-  const [selectedCurrency, setSelectedCurrency] = useState(userProfile?.currency || 'USD');
-  const [indBudget, setIndBudget] = useState(userProfile?.monthlyBudget?.individual?.toString() || '1500');
-  const [famBudget, setFamBudget] = useState(userProfile?.monthlyBudget?.family?.toString() || '4500');
-  const [firebaseConfigJson, setFirebaseConfigJson] = useState('');
+  const [selectedCurrency, setSelectedCurrency] = useState(userProfile?.currency || 'INR');
+  const [indBudget, setIndBudget] = useState(userProfile?.monthlyBudget?.individual?.toString() || '25000');
+  const [famBudget, setFamBudget] = useState(userProfile?.monthlyBudget?.family?.toString() || '75000');
   const [saveSuccess, setSaveSuccess] = useState(false);
+
+  useEffect(() => {
+    if (userProfile?.currency) {
+      setSelectedCurrency(userProfile.currency);
+    }
+    if (userProfile?.monthlyBudget?.individual !== undefined) {
+      setIndBudget(userProfile.monthlyBudget.individual.toString());
+    }
+    if (userProfile?.monthlyBudget?.family !== undefined) {
+      setFamBudget(userProfile.monthlyBudget.family.toString());
+    }
+  }, [userProfile]);
+
+  const handleCurrencyChange = async (newCurr: string) => {
+    setSelectedCurrency(newCurr);
+    await updateCurrency(newCurr);
+  };
 
   const handleSavePreferences = async (e: React.FormEvent) => {
     e.preventDefault();
     if (selectedCurrency !== userProfile?.currency) {
       await updateCurrency(selectedCurrency);
     }
-    const parsedInd = parseFloat(indBudget) || 1500;
-    const parsedFam = parseFloat(famBudget) || 4500;
+    const parsedInd = parseFloat(indBudget) || 25000;
+    const parsedFam = parseFloat(famBudget) || 75000;
     await updateMonthlyBudget('individual', parsedInd);
     await updateMonthlyBudget('family', parsedFam);
-
-    if (firebaseConfigJson.trim()) {
-      try {
-        const parsed = JSON.parse(firebaseConfigJson);
-        localStorage.setItem('EXPENSE_TRACKER_FIREBASE_CONFIG', JSON.stringify(parsed));
-      } catch (err) {
-        alert('Invalid Firebase JSON format');
-        return;
-      }
-    }
 
     setSaveSuccess(true);
     setTimeout(() => {
@@ -103,7 +108,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
             </p>
             <select
               value={selectedCurrency}
-              onChange={(e) => setSelectedCurrency(e.target.value)}
+              onChange={(e) => handleCurrencyChange(e.target.value)}
               className="w-full px-3 py-2 bg-white border border-gray-300 rounded-xl text-xs font-semibold text-gray-800 focus:outline-none focus:border-[#0057FF]"
             >
               {SUPPORTED_CURRENCIES.map((c) => (
@@ -175,28 +180,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
                 Export JSON
               </button>
             </div>
-          </div>
-
-          <div className="bg-blue-50/70 p-4 rounded-2xl border border-blue-100">
-            <span className="block text-xs font-bold text-[#0057FF] mb-1 flex items-center gap-1.5">
-              <Flame size={14} />
-              <span>Firebase Cloud Sync Status</span>
-            </span>
-            <p className="text-[11px] text-gray-600 mb-2.5">
-              Connected to project: <span className="font-mono font-bold text-gray-800">femspen-bee68</span>.
-              If you experience permission notices, copy the recommended security rules below and publish them in your Firebase Console:
-            </p>
-            <button
-              type="button"
-              onClick={() => {
-                const rules = `rules_version = '2';\nservice cloud.firestore {\n  match /databases/{database}/documents {\n    match /{document=**} {\n      allow read, write: if request.auth != null;\n    }\n  }\n}`;
-                navigator.clipboard.writeText(rules);
-                alert('Copied Firestore Security Rules to clipboard! Paste and Publish them in Firebase Console > Firestore Database > Rules tab.');
-              }}
-              className="px-3.5 py-1.5 bg-[#0057FF] hover:bg-[#0046D1] text-white text-xs font-bold rounded-xl cursor-pointer transition-colors shadow-xs"
-            >
-              Copy Recommended Firestore Rules
-            </button>
           </div>
 
           <button

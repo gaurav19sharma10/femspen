@@ -115,7 +115,7 @@ export const RecurringBills: React.FC<RecurringBillsProps> = ({
 
                 <div className="text-right">
                   <span className="text-sm font-bold text-gray-900 font-mono">
-                    {formatCurrency(bill.amount, bill.currency || userProfile?.currency)}
+                    {formatCurrency(bill.amount, userProfile?.currency || bill.currency || 'INR')}
                   </span>
                   <span className="block text-[10px] text-gray-400">
                     due on {bill.date}

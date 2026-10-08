@@ -87,7 +87,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (cachedStr) {
           try {
             const cachedProfile = JSON.parse(cachedStr);
-            setUserProfile(cachedProfile);
+            const normalized: UserProfile = {
+              ...cachedProfile,
+              currency: cachedProfile.currency || 'INR',
+              monthlyBudget: cachedProfile.monthlyBudget || { individual: 25000, family: 75000 },
+            };
+            setUserProfile(normalized);
             hasCachedProfile = true;
           } catch {
             // ignore
@@ -102,8 +107,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             (snapshot) => {
               if (snapshot.exists()) {
                 const data = snapshot.data() as UserProfile;
-                setUserProfile(data);
-                localStorage.setItem(`${LOCAL_STORAGE_PROFILE_KEY}_${firebaseUser.uid}`, JSON.stringify(data));
+                const normalized: UserProfile = {
+                  ...data,
+                  currency: data.currency || 'INR',
+                  monthlyBudget: data.monthlyBudget || { individual: 25000, family: 75000 },
+                };
+                setUserProfile(normalized);
+                localStorage.setItem(`${LOCAL_STORAGE_PROFILE_KEY}_${firebaseUser.uid}`, JSON.stringify(normalized));
               } else if (!hasCachedProfile) {
                 setUserProfile(null);
               }
@@ -198,10 +208,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       pinSalt,
       securityQuestion: question,
       securityAnswerHash: `${securityAnswerHash}:${answerSalt}`,
-      currency: 'USD',
+      currency: 'INR',
       monthlyBudget: {
-        individual: 1500,
-        family: 4500,
+        individual: 25000,
+        family: 75000,
       },
       createdAt: Date.now(),
     };
@@ -264,37 +274,59 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const updateCurrency = async (newCurrency: string) => {
-    if (!userProfile) return;
-    const updated = { ...userProfile, currency: newCurrency };
+    const uid = user?.uid || userProfile?.uid || 'local_user';
+    const base: UserProfile = userProfile || {
+      uid,
+      email: user?.email || '',
+      pinHash: '',
+      pinSalt: '',
+      securityQuestion: '',
+      securityAnswerHash: '',
+      currency: 'INR',
+      monthlyBudget: { individual: 25000, family: 75000 },
+      createdAt: Date.now(),
+    };
+    const updated = { ...base, currency: newCurrency };
     setUserProfile(updated);
-    localStorage.setItem(`${LOCAL_STORAGE_PROFILE_KEY}_${userProfile.uid}`, JSON.stringify(updated));
+    localStorage.setItem(`${LOCAL_STORAGE_PROFILE_KEY}_${uid}`, JSON.stringify(updated));
 
     if (db && user) {
       try {
-        await setDoc(doc(db, 'users', user.uid), updated);
+        await setDoc(doc(db, 'users', user.uid), updated, { merge: true });
       } catch (err) {
-        console.warn('Firestore currency sync error:', err);
+        console.warn('Firestore currency sync notice:', err);
       }
     }
   };
 
   const updateMonthlyBudget = async (mode: ExpenseMode, amount: number) => {
-    if (!userProfile) return;
+    const uid = user?.uid || userProfile?.uid || 'local_user';
+    const base: UserProfile = userProfile || {
+      uid,
+      email: user?.email || '',
+      pinHash: '',
+      pinSalt: '',
+      securityQuestion: '',
+      securityAnswerHash: '',
+      currency: 'INR',
+      monthlyBudget: { individual: 25000, family: 75000 },
+      createdAt: Date.now(),
+    };
     const updated: UserProfile = {
-      ...userProfile,
+      ...base,
       monthlyBudget: {
-        ...userProfile.monthlyBudget,
+        ...(base.monthlyBudget || { individual: 1500, family: 4500 }),
         [mode]: amount,
       },
     };
     setUserProfile(updated);
-    localStorage.setItem(`${LOCAL_STORAGE_PROFILE_KEY}_${userProfile.uid}`, JSON.stringify(updated));
+    localStorage.setItem(`${LOCAL_STORAGE_PROFILE_KEY}_${uid}`, JSON.stringify(updated));
 
     if (db && user) {
       try {
-        await setDoc(doc(db, 'users', user.uid), updated);
+        await setDoc(doc(db, 'users', user.uid), updated, { merge: true });
       } catch (err) {
-        console.warn('Firestore budget sync error:', err);
+        console.warn('Firestore budget sync notice:', err);
       }
     }
   };

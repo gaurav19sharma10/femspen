@@ -114,7 +114,7 @@ export const ExpenseEditor: React.FC<ExpenseEditorProps> = ({
         await addExpense({
           title: title.trim() || 'Untitled Expense',
           amount: parsedAmount,
-          currency: userProfile?.currency || 'USD',
+          currency: userProfile?.currency || 'INR',
           category,
           mode: currentMode,
           color,
