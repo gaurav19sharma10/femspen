@@ -40,7 +40,20 @@ A full-featured personal and family expense management application inspired by t
 4. **Real-time Firestore Sync Engine**:
    - Updates made on Web or Android propagate instantly via Firestore snapshot listeners without needing a page refresh.
 
-5. **Financial Analytics & Tools**:
+5. **🎯 Goals — Family & Individual Savings System**:
+   - **Individual Goals**: Personal saving targets with manual top-ups, daily/monthly automated schedules, and round-ups.
+   - **Group Family Goals**: Shared saving targets among selected family members with real-time contribution tracking and leaderboards.
+   - **Unanimous Spending Approval**: Withdrawing or spending from a group goal requires unanimous consent from all participating members.
+   - **Round-Up Savings**: Automatically rounds up expenses to the nearest ₹10 or ₹100 and sweeps spare change into active goals.
+
+6. **💳 Family & Individual Wallet System**:
+   - **Audited Financial Ledger**: Dual-mode ledger tracking every top-up, transfer, expense deduction, adjustment, and reversal.
+   - **Family Head Permissions**: Add funds, transfer money atomically to any family member, review and approve/reject money requests with urgency tags.
+   - **Spending Controls & Safeguards**: Set daily/monthly member spending limits, freeze/unfreeze wallets, and enforce negative balance policies (`Block`, `Allow with Limit`, `Unlimited`).
+   - **Automated Allowances**: Schedule recurring daily, weekly, or monthly allowances for family members.
+   - **Seamless Expense Integration**: Expenses are automatically debited from the active wallet with reversal protection on deletion.
+
+7. **Financial Analytics & Tools**:
    - Category distribution visual donut/bar breakdowns.
    - Monthly budget cap progress bars with overspend alerts.
    - Recurring subscriptions & upcoming bill manager.
