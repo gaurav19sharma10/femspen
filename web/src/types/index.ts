@@ -19,9 +19,41 @@ export interface Expense {
   updatedAt: number;
 }
 
+export type Gender = 'Male' | 'Female' | 'Other' | 'Prefer not to say';
+export type FamilyRole = 'head' | 'member';
+
+export interface FamilyMember {
+  uid: string;
+  displayName: string;
+  role: FamilyRole;
+  photoUrl?: string;
+  phoneNumber?: string;
+  gender?: Gender;
+  joinedAt: number;
+}
+
+export interface FamilyGroup {
+  id: string;
+  name: string;
+  inviteCode: string;
+  headUserId: string;
+  headName: string;
+  members: FamilyMember[];
+  createdAt: number;
+  updatedAt: number;
+}
+
 export interface UserProfile {
   uid: string;
   email: string;
+  displayName?: string;
+  dob?: string; // YYYY-MM-DD
+  gender?: Gender;
+  phoneNumber?: string;
+  photoUrl?: string;
+  familyId?: string;
+  familyRole?: FamilyRole;
+  familyName?: string;
   pinHash: string;
   pinSalt: string;
   securityQuestion: string;
@@ -32,6 +64,19 @@ export interface UserProfile {
     family: number;
   };
   createdAt: number;
+}
+
+export function calculateAge(dobStr?: string): number | null {
+  if (!dobStr) return null;
+  const birthDate = new Date(dobStr);
+  if (isNaN(birthDate.getTime())) return null;
+  const today = new Date();
+  let age = today.getFullYear() - birthDate.getFullYear();
+  const m = today.getMonth() - birthDate.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+    age--;
+  }
+  return age >= 0 ? age : null;
 }
 
 export interface DateGroup {

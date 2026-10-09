@@ -11,6 +11,7 @@ import { ExpenseEditor } from './components/feed/ExpenseEditor';
 import { SpendCharts } from './components/analytics/SpendCharts';
 import { RecurringBills } from './components/recurring/RecurringBills';
 import { SettingsModal } from './components/settings/SettingsModal';
+import { ProfileModal } from './components/profile/ProfileModal';
 import { Expense } from './types';
 import { Plus } from 'lucide-react';
 import { motion } from 'framer-motion';
@@ -22,6 +23,7 @@ const MainAppContent: React.FC = () => {
   const [isAnalyticsOpen, setIsAnalyticsOpen] = useState(false);
   const [isRecurringOpen, setIsRecurringOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
 
   if (loading) {
     return (
@@ -72,6 +74,7 @@ const MainAppContent: React.FC = () => {
         onOpenAnalytics={() => setIsAnalyticsOpen(true)}
         onOpenRecurring={() => setIsRecurringOpen(true)}
         onOpenSettings={() => setIsSettingsOpen(true)}
+        onOpenProfile={() => setIsProfileOpen(true)}
       />
 
       <main className="flex-1 max-w-6xl w-full mx-auto px-4 pt-3">
@@ -125,6 +128,11 @@ const MainAppContent: React.FC = () => {
       {/* Settings Modal */}
       {isSettingsOpen && (
         <SettingsModal onClose={() => setIsSettingsOpen(false)} />
+      )}
+
+      {/* Profile & Family Hub Modal */}
+      {isProfileOpen && (
+        <ProfileModal onClose={() => setIsProfileOpen(false)} />
       )}
     </div>
   );

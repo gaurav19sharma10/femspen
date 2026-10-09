@@ -21,12 +21,14 @@ interface KeepHeaderProps {
   onOpenAnalytics: () => void;
   onOpenRecurring: () => void;
   onOpenSettings: () => void;
+  onOpenProfile: () => void;
 }
 
 export const KeepHeader: React.FC<KeepHeaderProps> = ({
   onOpenAnalytics,
   onOpenRecurring,
   onOpenSettings,
+  onOpenProfile,
 }) => {
   const { currentMode, setCurrentMode, searchQuery, setSearchQuery, stats, expenses } = useExpense();
   const { lockSession, userProfile } = useAuth();
@@ -139,6 +141,27 @@ export const KeepHeader: React.FC<KeepHeaderProps> = ({
             title="Export CSV"
           >
             <Download size={17} />
+          </button>
+
+          {/* Profile & Family Hub Button */}
+          <button
+            onClick={onOpenProfile}
+            className="flex items-center gap-2 pl-1.5 pr-2.5 py-1 bg-white hover:bg-gray-100 border border-gray-200/80 rounded-xl cursor-pointer shadow-xs transition-colors"
+            title="Profile & Family Hub"
+          >
+            <div className="w-6 h-6 rounded-full bg-blue-100 text-[#0057FF] font-bold text-xs flex items-center justify-center overflow-hidden shrink-0">
+              {userProfile?.photoUrl ? (
+                <img src={userProfile.photoUrl} alt="" className="w-full h-full object-cover" />
+              ) : (
+                (userProfile?.displayName || userProfile?.email || 'U')[0].toUpperCase()
+              )}
+            </div>
+            <span className="text-xs font-bold text-gray-800 max-w-[90px] truncate hidden sm:inline">
+              {userProfile?.displayName || 'Profile'}
+            </span>
+            {userProfile?.familyRole === 'head' && (
+              <span className="text-[10px] text-amber-500 font-bold" title="Head of Family">👑</span>
+            )}
           </button>
 
           <button

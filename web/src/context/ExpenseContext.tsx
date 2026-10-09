@@ -56,7 +56,8 @@ const sanitizeForFirestore = (obj: Record<string, any>): Record<string, any> => 
 
 export const ExpenseProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, userProfile } = useAuth();
-  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [personalExpenses, setPersonalExpenses] = useState<Expense[]>([]);
+  const [familyExpenses, setFamilyExpenses] = useState<Expense[]>([]);
   const [currentMode, setCurrentMode] = useState<ExpenseMode>('individual');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
@@ -64,20 +65,19 @@ export const ExpenseProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [loading, setLoading] = useState(true);
   const [isRulesLocked, setIsRulesLocked] = useState(false);
 
-  // Load and listen to user's real Firestore expenses
+  // Load and listen to user's personal Firestore expenses
   useEffect(() => {
     if (!user) {
-      setExpenses([]);
+      setPersonalExpenses([]);
       setLoading(false);
       return;
     }
 
     const storageKey = `${LOCAL_STORAGE_EXPENSES_KEY}_${user.uid}`;
-    // Load local cached expenses for instant render
     const cached = localStorage.getItem(storageKey);
     if (cached) {
       try {
-        setExpenses(JSON.parse(cached));
+        setPersonalExpenses(JSON.parse(cached));
       } catch {
         // ignore
       }
@@ -85,7 +85,7 @@ export const ExpenseProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     if (isFirebaseConfigured && db) {
       const expensesRef = collection(db, 'users', user.uid, 'expenses');
-      let q = query(expensesRef, orderBy('createdAt', 'desc'));
+      const q = query(expensesRef, orderBy('createdAt', 'desc'));
 
       const unsubscribe = onSnapshot(
         q,
@@ -113,15 +113,12 @@ export const ExpenseProvider: React.FC<{ children: React.ReactNode }> = ({ child
             };
           });
 
-          setExpenses(fetched);
+          setPersonalExpenses(fetched);
           localStorage.setItem(storageKey, JSON.stringify(fetched));
           setLoading(false);
         },
         (error) => {
-          console.warn('Firestore live listener notice (offline or rules):', error.message);
-          if (error.code === 'permission-denied' || error.message.includes('permission')) {
-            setIsRulesLocked(true);
-          }
+          console.warn('Firestore personal listener notice:', error.message);
           setLoading(false);
         }
       );
@@ -132,101 +129,197 @@ export const ExpenseProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   }, [user, userProfile?.currency]);
 
-  const persistExpensesLocally = (updated: Expense[]) => {
-    if (!user) return;
-    const storageKey = `${LOCAL_STORAGE_EXPENSES_KEY}_${user.uid}`;
-    setExpenses(updated);
-    localStorage.setItem(storageKey, JSON.stringify(updated));
-  };
+  // Load and listen to shared family Firestore expenses
+  useEffect(() => {
+    if (!userProfile?.familyId) {
+      setFamilyExpenses([]);
+      return;
+    }
+
+    const famStorageKey = `FEMSPEN_FAMILY_EXPENSES_${userProfile.familyId}`;
+    const cached = localStorage.getItem(famStorageKey);
+    if (cached) {
+      try {
+        setFamilyExpenses(JSON.parse(cached));
+      } catch {
+        // ignore
+      }
+    }
+
+    if (isFirebaseConfigured && db) {
+      const expensesRef = collection(db, 'families', userProfile.familyId, 'expenses');
+      const q = query(expensesRef, orderBy('createdAt', 'desc'));
+
+      const unsubscribe = onSnapshot(
+        q,
+        (snapshot) => {
+          const fetched: Expense[] = snapshot.docs.map((docSnap) => {
+            const data = docSnap.data();
+            return {
+              id: docSnap.id,
+              title: data.title || '',
+              amount: Number(data.amount) || 0,
+              currency: data.currency || userProfile?.currency || 'INR',
+              category: data.category || 'General',
+              mode: 'family',
+              color: data.color || '#F8F7F4',
+              isPinned: Boolean(data.isPinned),
+              date: data.date || new Date().toISOString().split('T')[0],
+              notes: data.notes || '',
+              familyMember: data.familyMember || undefined,
+              isRecurring: Boolean(data.isRecurring),
+              recurringInterval: data.recurringInterval || undefined,
+              receiptUrl: data.receiptUrl || undefined,
+              createdAt: data.createdAt?.toMillis ? data.createdAt.toMillis() : (data.createdAt || Date.now()),
+              updatedAt: data.updatedAt?.toMillis ? data.updatedAt.toMillis() : (data.updatedAt || Date.now()),
+            };
+          });
+
+          setFamilyExpenses(fetched);
+          localStorage.setItem(famStorageKey, JSON.stringify(fetched));
+        },
+        (error) => {
+          console.warn('Firestore family expenses listener notice:', error.message);
+        }
+      );
+
+      return () => unsubscribe();
+    }
+  }, [userProfile?.familyId, userProfile?.currency]);
+
+  // Combined active expenses list based on selected mode
+  const expenses = useMemo(() => {
+    if (currentMode === 'family') {
+      return userProfile?.familyId
+        ? familyExpenses
+        : personalExpenses.filter((e) => e.mode === 'family');
+    }
+    return personalExpenses.filter((e) => e.mode === 'individual' || !e.mode);
+  }, [currentMode, userProfile?.familyId, familyExpenses, personalExpenses]);
 
   const addExpense = async (data: Omit<Expense, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> => {
     const now = Date.now();
     const tempId = 'exp_' + Math.random().toString(36).substring(2, 10);
+    const isFamilyShared = currentMode === 'family' && Boolean(userProfile?.familyId);
+
     const newExpense: Expense = {
       ...data,
       id: tempId,
       mode: currentMode,
       currency: data.currency || userProfile?.currency || 'INR',
+      familyMember: currentMode === 'family' ? (data.familyMember || userProfile?.displayName || 'Family Member') : undefined,
       createdAt: now,
       updatedAt: now,
     };
 
-    // Optimistically update local state & cache
-    const updated = [newExpense, ...expenses];
-    persistExpensesLocally(updated);
+    if (isFamilyShared && userProfile?.familyId) {
+      const updated = [newExpense, ...familyExpenses];
+      setFamilyExpenses(updated);
+      localStorage.setItem(`FEMSPEN_FAMILY_EXPENSES_${userProfile.familyId}`, JSON.stringify(updated));
 
-    // Sync to Firestore
-    if (isFirebaseConfigured && db && user) {
-      try {
-        const expensesRef = collection(db, 'users', user.uid, 'expenses');
-        const payload = sanitizeForFirestore({
-          title: data.title,
-          amount: data.amount,
-          category: data.category,
-          mode: currentMode,
-          color: data.color,
-          isPinned: Boolean(data.isPinned),
-          date: data.date,
-          notes: data.notes || '',
-          familyMember: data.familyMember,
-          isRecurring: Boolean(data.isRecurring),
-          recurringInterval: data.recurringInterval,
-          receiptUrl: data.receiptUrl,
-          currency: data.currency || userProfile?.currency || 'INR',
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        });
-
-        const docRef = await addDoc(expensesRef, payload);
-        // Replace temp ID with real Firestore doc ID
-        const withRealId = updated.map((e) => (e.id === tempId ? { ...e, id: docRef.id } : e));
-        persistExpensesLocally(withRealId);
-        setIsRulesLocked(false);
-        return docRef.id;
-      } catch (err: any) {
-        console.warn('Note: Expense saved to offline storage. Cloud sync notice:', err.message);
-        if (err.code === 'permission-denied' || err.message?.includes('permission')) {
-          setIsRulesLocked(true);
+      if (isFirebaseConfigured && db) {
+        try {
+          const colRef = collection(db, 'families', userProfile.familyId, 'expenses');
+          const payload = sanitizeForFirestore({
+            ...newExpense,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          });
+          const docRef = await addDoc(colRef, payload);
+          return docRef.id;
+        } catch (err: any) {
+          console.warn('Family expense sync error:', err.message);
         }
       }
-    }
+      return tempId;
+    } else {
+      const updated = [newExpense, ...personalExpenses];
+      setPersonalExpenses(updated);
+      if (user) {
+        localStorage.setItem(`${LOCAL_STORAGE_EXPENSES_KEY}_${user.uid}`, JSON.stringify(updated));
+      }
 
-    return tempId;
+      if (isFirebaseConfigured && db && user) {
+        try {
+          const colRef = collection(db, 'users', user.uid, 'expenses');
+          const payload = sanitizeForFirestore({
+            ...newExpense,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          });
+          const docRef = await addDoc(colRef, payload);
+          return docRef.id;
+        } catch (err: any) {
+          console.warn('Personal expense sync error:', err.message);
+        }
+      }
+      return tempId;
+    }
   };
 
   const updateExpense = async (id: string, updates: Partial<Expense>): Promise<void> => {
     const now = Date.now();
-    const updated = expenses.map((e) => (e.id === id ? { ...e, ...updates, updatedAt: now } : e));
-    persistExpensesLocally(updated);
+    const isFamilyTarget = familyExpenses.some((e) => e.id === id);
 
-    if (isFirebaseConfigured && db && user) {
-      try {
-        const expenseDocRef = doc(db, 'users', user.uid, 'expenses', id);
-        const cleanUpdates = sanitizeForFirestore({
-          ...updates,
-          updatedAt: serverTimestamp(),
-        });
-        await updateDoc(expenseDocRef, cleanUpdates);
-        setIsRulesLocked(false);
-      } catch (err: any) {
-        console.warn('Note: Expense updated locally. Cloud sync notice:', err.message);
-        if (err.code === 'permission-denied' || err.message?.includes('permission')) {
-          setIsRulesLocked(true);
+    if (isFamilyTarget && userProfile?.familyId) {
+      const updated = familyExpenses.map((e) => (e.id === id ? { ...e, ...updates, updatedAt: now } : e));
+      setFamilyExpenses(updated);
+      localStorage.setItem(`FEMSPEN_FAMILY_EXPENSES_${userProfile.familyId}`, JSON.stringify(updated));
+
+      if (isFirebaseConfigured && db) {
+        try {
+          const docRef = doc(db, 'families', userProfile.familyId, 'expenses', id);
+          await updateDoc(docRef, sanitizeForFirestore({ ...updates, updatedAt: serverTimestamp() }));
+        } catch (err: any) {
+          console.warn('Family expense update error:', err.message);
+        }
+      }
+    } else {
+      const updated = personalExpenses.map((e) => (e.id === id ? { ...e, ...updates, updatedAt: now } : e));
+      setPersonalExpenses(updated);
+      if (user) {
+        localStorage.setItem(`${LOCAL_STORAGE_EXPENSES_KEY}_${user.uid}`, JSON.stringify(updated));
+      }
+
+      if (isFirebaseConfigured && db && user) {
+        try {
+          const docRef = doc(db, 'users', user.uid, 'expenses', id);
+          await updateDoc(docRef, sanitizeForFirestore({ ...updates, updatedAt: serverTimestamp() }));
+        } catch (err: any) {
+          console.warn('Personal expense update error:', err.message);
         }
       }
     }
   };
 
   const deleteExpense = async (id: string): Promise<void> => {
-    const updated = expenses.filter((e) => e.id !== id);
-    persistExpensesLocally(updated);
+    const isFamilyTarget = familyExpenses.some((e) => e.id === id);
 
-    if (isFirebaseConfigured && db && user) {
-      try {
-        const expenseDocRef = doc(db, 'users', user.uid, 'expenses', id);
-        await deleteDoc(expenseDocRef);
-      } catch (err: any) {
-        console.warn('Note: Expense deleted locally. Cloud sync notice:', err.message);
+    if (isFamilyTarget && userProfile?.familyId) {
+      const updated = familyExpenses.filter((e) => e.id !== id);
+      setFamilyExpenses(updated);
+      localStorage.setItem(`FEMSPEN_FAMILY_EXPENSES_${userProfile.familyId}`, JSON.stringify(updated));
+
+      if (isFirebaseConfigured && db) {
+        try {
+          await deleteDoc(doc(db, 'families', userProfile.familyId, 'expenses', id));
+        } catch (err: any) {
+          console.warn('Family expense delete error:', err.message);
+        }
+      }
+    } else {
+      const updated = personalExpenses.filter((e) => e.id !== id);
+      setPersonalExpenses(updated);
+      if (user) {
+        localStorage.setItem(`${LOCAL_STORAGE_EXPENSES_KEY}_${user.uid}`, JSON.stringify(updated));
+      }
+
+      if (isFirebaseConfigured && db && user) {
+        try {
+          await deleteDoc(doc(db, 'users', user.uid, 'expenses', id));
+        } catch (err: any) {
+          console.warn('Personal expense delete error:', err.message);
+        }
       }
     }
   };

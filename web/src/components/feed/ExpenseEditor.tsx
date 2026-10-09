@@ -29,7 +29,14 @@ export const ExpenseEditor: React.FC<ExpenseEditorProps> = ({
   onClose,
 }) => {
   const { addExpense, updateExpense, deleteExpense, currentMode } = useExpense();
-  const { userProfile } = useAuth();
+  const { userProfile, family } = useAuth();
+
+  const memberOptions = React.useMemo(() => {
+    if (family?.members && family.members.length > 0) {
+      return ['Shared Household', ...family.members.map((m) => m.displayName)];
+    }
+    return FAMILY_MEMBERS;
+  }, [family]);
 
   const [title, setTitle] = useState('');
   const [amount, setAmount] = useState('');
@@ -260,7 +267,7 @@ export const ExpenseEditor: React.FC<ExpenseEditorProps> = ({
                     onChange={(e) => setFamilyMember(e.target.value)}
                     className="w-full px-3 py-2 bg-white/80 rounded-xl text-xs font-medium text-gray-800 focus:outline-none border border-black/5"
                   >
-                    {FAMILY_MEMBERS.map((m, idx) => (
+                    {memberOptions.map((m, idx) => (
                       <option key={idx} value={m}>
                         {m}
                       </option>

@@ -6,20 +6,40 @@ import {
   onAuthStateChanged,
   User as FirebaseUser
 } from 'firebase/auth';
-import { doc, setDoc, onSnapshot } from 'firebase/firestore';
+import {
+  doc,
+  setDoc,
+  updateDoc,
+  onSnapshot,
+  collection,
+  query,
+  where,
+  getDocs
+} from 'firebase/firestore';
 import { auth, db, isFirebaseConfigured } from '../lib/firebase';
 import { generateSalt, hashString, verifyHash } from '../lib/crypto';
-import { UserProfile, ExpenseMode } from '../types';
+import { UserProfile, ExpenseMode, Gender, FamilyGroup } from '../types';
 
 interface AuthContextType {
   user: { uid: string; email: string } | null;
   userProfile: UserProfile | null;
+  family: FamilyGroup | null;
   isAuthenticated: boolean;
   isPinLocked: boolean;
   isPinConfigured: boolean;
   loading: boolean;
   loginWithEmail: (email: string, pass: string) => Promise<{ success: boolean; error?: string }>;
-  signupWithEmail: (email: string, pass: string) => Promise<{ success: boolean; error?: string }>;
+  signupWithEmail: (
+    email: string,
+    pass: string,
+    extraData?: {
+      displayName?: string;
+      dob?: string;
+      gender?: Gender;
+      phoneNumber?: string;
+      photoUrl?: string;
+    }
+  ) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
   unlockWithPin: (pin: string) => Promise<boolean>;
   setupPinAndSecurity: (pin: string, question: string, answer: string) => Promise<boolean>;
@@ -27,11 +47,17 @@ interface AuthContextType {
   lockSession: () => void;
   updateCurrency: (currency: string) => Promise<void>;
   updateMonthlyBudget: (mode: ExpenseMode, amount: number) => Promise<void>;
+  updateUserProfile: (updates: Partial<UserProfile>) => Promise<void>;
+  createFamily: (familyName: string) => Promise<{ success: boolean; family?: FamilyGroup; error?: string }>;
+  joinFamily: (inviteCode: string) => Promise<{ success: boolean; family?: FamilyGroup; error?: string }>;
+  leaveFamily: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const LOCAL_STORAGE_PROFILE_KEY = 'FEMSPEN_PROFILE';
+const LOCAL_STORAGE_FAMILY_KEY = 'FEMSPEN_FAMILY';
+const LOCAL_STORAGE_PENDING_REGISTRATION = 'FEMSPEN_PENDING_REGISTRATION';
 
 const formatFirebaseError = (error: any): string => {
   const code = error?.code || '';
@@ -60,9 +86,11 @@ const formatFirebaseError = (error: any): string => {
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<{ uid: string; email: string } | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [family, setFamily] = useState<FamilyGroup | null>(null);
   const [isPinLocked, setIsPinLocked] = useState<boolean>(true);
   const [loading, setLoading] = useState<boolean>(true);
 
+  // Profile Listener & Cache
   useEffect(() => {
     if (!isFirebaseConfigured || !auth) {
       setLoading(false);
@@ -130,6 +158,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } else {
         setUser(null);
         setUserProfile(null);
+        setFamily(null);
         setIsPinLocked(true);
         setLoading(false);
       }
@@ -140,6 +169,44 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       unsubscribeAuth();
     };
   }, []);
+
+  // Real-time Family Sync Listener
+  useEffect(() => {
+    if (!userProfile?.familyId) {
+      setFamily(null);
+      return;
+    }
+
+    const famStorageKey = `${LOCAL_STORAGE_FAMILY_KEY}_${userProfile.familyId}`;
+    const cachedFam = localStorage.getItem(famStorageKey);
+    if (cachedFam) {
+      try {
+        setFamily(JSON.parse(cachedFam));
+      } catch {
+        // ignore
+      }
+    }
+
+    if (db) {
+      const famRef = doc(db, 'families', userProfile.familyId);
+      const unsub = onSnapshot(
+        famRef,
+        (docSnap) => {
+          if (docSnap.exists()) {
+            const famData = docSnap.data() as FamilyGroup;
+            setFamily(famData);
+            localStorage.setItem(famStorageKey, JSON.stringify(famData));
+          } else {
+            setFamily(null);
+          }
+        },
+        (err) => {
+          console.warn('Family listener notice:', err.message);
+        }
+      );
+      return () => unsub();
+    }
+  }, [userProfile?.familyId]);
 
   const isPinConfigured = Boolean(
     userProfile?.pinHash && userProfile?.pinSalt && userProfile?.securityAnswerHash
@@ -159,12 +226,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const signupWithEmail = async (email: string, pass: string): Promise<{ success: boolean; error?: string }> => {
+  const signupWithEmail = async (
+    email: string,
+    pass: string,
+    extraData?: {
+      displayName?: string;
+      dob?: string;
+      gender?: Gender;
+      phoneNumber?: string;
+      photoUrl?: string;
+    }
+  ): Promise<{ success: boolean; error?: string }> => {
     if (!auth) {
       return { success: false, error: 'Firebase Auth is not initialized.' };
     }
 
     try {
+      if (extraData) {
+        localStorage.setItem(LOCAL_STORAGE_PENDING_REGISTRATION, JSON.stringify(extraData));
+      }
       await createUserWithEmailAndPassword(auth, email.trim(), pass);
       setIsPinLocked(true);
       return { success: true };
@@ -179,6 +259,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     setUser(null);
     setUserProfile(null);
+    setFamily(null);
     setIsPinLocked(true);
   };
 
@@ -201,9 +282,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const answerSalt = generateSalt();
     const securityAnswerHash = await hashString(answer.trim().toLowerCase(), answerSalt);
 
+    let pendingData: any = {};
+    const pendingStr = localStorage.getItem(LOCAL_STORAGE_PENDING_REGISTRATION);
+    if (pendingStr) {
+      try {
+        pendingData = JSON.parse(pendingStr);
+        localStorage.removeItem(LOCAL_STORAGE_PENDING_REGISTRATION);
+      } catch {
+        // ignore
+      }
+    }
+
     const newProfile: UserProfile = {
       uid: user.uid,
       email: user.email,
+      displayName: pendingData.displayName || user.email.split('@')[0],
+      dob: pendingData.dob || undefined,
+      gender: pendingData.gender || undefined,
+      phoneNumber: pendingData.phoneNumber || undefined,
+      photoUrl: pendingData.photoUrl || undefined,
       pinHash,
       pinSalt,
       securityQuestion: question,
@@ -273,33 +370,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsPinLocked(true);
   };
 
-  const updateCurrency = async (newCurrency: string) => {
-    const uid = user?.uid || userProfile?.uid || 'local_user';
-    const base: UserProfile = userProfile || {
-      uid,
-      email: user?.email || '',
-      pinHash: '',
-      pinSalt: '',
-      securityQuestion: '',
-      securityAnswerHash: '',
-      currency: 'INR',
-      monthlyBudget: { individual: 25000, family: 75000 },
-      createdAt: Date.now(),
-    };
-    const updated = { ...base, currency: newCurrency };
-    setUserProfile(updated);
-    localStorage.setItem(`${LOCAL_STORAGE_PROFILE_KEY}_${uid}`, JSON.stringify(updated));
-
-    if (db && user) {
-      try {
-        await setDoc(doc(db, 'users', user.uid), updated, { merge: true });
-      } catch (err) {
-        console.warn('Firestore currency sync notice:', err);
-      }
-    }
-  };
-
-  const updateMonthlyBudget = async (mode: ExpenseMode, amount: number) => {
+  const updateUserProfile = async (updates: Partial<UserProfile>): Promise<void> => {
+    if (!userProfile && !user) return;
     const uid = user?.uid || userProfile?.uid || 'local_user';
     const base: UserProfile = userProfile || {
       uid,
@@ -314,21 +386,229 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
     const updated: UserProfile = {
       ...base,
-      monthlyBudget: {
-        ...(base.monthlyBudget || { individual: 1500, family: 4500 }),
-        [mode]: amount,
-      },
+      ...updates,
     };
+
     setUserProfile(updated);
     localStorage.setItem(`${LOCAL_STORAGE_PROFILE_KEY}_${uid}`, JSON.stringify(updated));
 
     if (db && user) {
       try {
         await setDoc(doc(db, 'users', user.uid), updated, { merge: true });
-      } catch (err) {
-        console.warn('Firestore budget sync notice:', err);
+      } catch (err: any) {
+        console.warn('Profile sync notice:', err.message);
       }
     }
+
+    // If profile name or avatar updated and user belongs to a family, sync inside family document
+    if (family && updated.familyId) {
+      const updatedMembers = family.members.map((m) =>
+        m.uid === uid
+          ? {
+              ...m,
+              displayName: updated.displayName || m.displayName,
+              photoUrl: updated.photoUrl || m.photoUrl,
+              phoneNumber: updated.phoneNumber || m.phoneNumber,
+              gender: updated.gender || m.gender,
+            }
+          : m
+      );
+      const updatedFamily = { ...family, members: updatedMembers, updatedAt: Date.now() };
+      setFamily(updatedFamily);
+      localStorage.setItem(`${LOCAL_STORAGE_FAMILY_KEY}_${family.id}`, JSON.stringify(updatedFamily));
+      if (db) {
+        try {
+          await updateDoc(doc(db, 'families', family.id), {
+            members: updatedMembers,
+            updatedAt: Date.now(),
+          });
+        } catch {
+          // ignore
+        }
+      }
+    }
+  };
+
+  const updateCurrency = async (newCurrency: string) => {
+    await updateUserProfile({ currency: newCurrency });
+  };
+
+  const updateMonthlyBudget = async (mode: ExpenseMode, amount: number) => {
+    const current = userProfile?.monthlyBudget || { individual: 25000, family: 75000 };
+    await updateUserProfile({
+      monthlyBudget: {
+        ...current,
+        [mode]: amount,
+      },
+    });
+  };
+
+  // Family Management: Create Family (Creator becomes Head of the Family)
+  const createFamily = async (familyName: string): Promise<{ success: boolean; family?: FamilyGroup; error?: string }> => {
+    if (!user) return { success: false, error: 'Must be signed in to create a family.' };
+
+    const familyId = 'fam_' + Date.now().toString(36) + Math.random().toString(36).substring(2, 6);
+    const randomDigits = Math.floor(1000 + Math.random() * 9000);
+    const inviteCode = `FS${randomDigits}`;
+
+    const headMember = {
+      uid: user.uid,
+      displayName: userProfile?.displayName || user.email.split('@')[0] || 'Family Head',
+      role: 'head' as const,
+      photoUrl: userProfile?.photoUrl,
+      phoneNumber: userProfile?.phoneNumber,
+      gender: userProfile?.gender,
+      joinedAt: Date.now(),
+    };
+
+    const newFamily: FamilyGroup = {
+      id: familyId,
+      name: familyName.trim() || 'My Family',
+      inviteCode,
+      headUserId: user.uid,
+      headName: headMember.displayName,
+      members: [headMember],
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+
+    setFamily(newFamily);
+    localStorage.setItem(`${LOCAL_STORAGE_FAMILY_KEY}_${familyId}`, JSON.stringify(newFamily));
+
+    await updateUserProfile({
+      familyId,
+      familyRole: 'head',
+      familyName: newFamily.name,
+    });
+
+    if (db) {
+      try {
+        await setDoc(doc(db, 'families', familyId), newFamily);
+      } catch (err: any) {
+        console.warn('Firestore family creation notice:', err.message);
+      }
+    }
+
+    return { success: true, family: newFamily };
+  };
+
+  // Family Management: Join an Existing Family via Invite Code
+  const joinFamily = async (inviteCode: string): Promise<{ success: boolean; family?: FamilyGroup; error?: string }> => {
+    if (!user) return { success: false, error: 'Must be signed in to join a family.' };
+
+    const cleanCode = inviteCode.trim().toUpperCase();
+    if (!cleanCode) return { success: false, error: 'Please enter a valid invite code.' };
+
+    let foundFamily: FamilyGroup | null = null;
+
+    if (db) {
+      try {
+        const q = query(collection(db, 'families'), where('inviteCode', '==', cleanCode));
+        const snap = await getDocs(q);
+        if (!snap.empty) {
+          foundFamily = snap.docs[0].data() as FamilyGroup;
+        }
+      } catch (err: any) {
+        console.warn('Firestore family query notice:', err.message);
+      }
+    }
+
+    // Local storage lookup fallback
+    if (!foundFamily) {
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith(LOCAL_STORAGE_FAMILY_KEY)) {
+          try {
+            const parsed = JSON.parse(localStorage.getItem(key) || '{}');
+            if (parsed.inviteCode === cleanCode) {
+              foundFamily = parsed;
+              break;
+            }
+          } catch {
+            // ignore
+          }
+        }
+      }
+    }
+
+    if (!foundFamily) {
+      return {
+        success: false,
+        error: `No family found with invite code "${cleanCode}". Please verify the code with your family head.`,
+      };
+    }
+
+    const currentMember = {
+      uid: user.uid,
+      displayName: userProfile?.displayName || user.email.split('@')[0] || 'Family Member',
+      role: 'member' as const,
+      photoUrl: userProfile?.photoUrl,
+      phoneNumber: userProfile?.phoneNumber,
+      gender: userProfile?.gender,
+      joinedAt: Date.now(),
+    };
+
+    const updatedMembers = [
+      ...foundFamily.members.filter((m) => m.uid !== user.uid),
+      currentMember,
+    ];
+
+    const updatedFamily: FamilyGroup = {
+      ...foundFamily,
+      members: updatedMembers,
+      updatedAt: Date.now(),
+    };
+
+    setFamily(updatedFamily);
+    localStorage.setItem(`${LOCAL_STORAGE_FAMILY_KEY}_${foundFamily.id}`, JSON.stringify(updatedFamily));
+
+    await updateUserProfile({
+      familyId: foundFamily.id,
+      familyRole: 'member',
+      familyName: foundFamily.name,
+    });
+
+    if (db) {
+      try {
+        await updateDoc(doc(db, 'families', foundFamily.id), {
+          members: updatedMembers,
+          updatedAt: Date.now(),
+        });
+      } catch (err: any) {
+        console.warn('Firestore join family update notice:', err.message);
+      }
+    }
+
+    return { success: true, family: updatedFamily };
+  };
+
+  // Family Management: Leave Current Family
+  const leaveFamily = async (): Promise<void> => {
+    if (!user || !userProfile?.familyId) return;
+
+    const currentFamId = userProfile.familyId;
+    if (family && family.id === currentFamId) {
+      const remainingMembers = family.members.filter((m) => m.uid !== user.uid);
+      const updatedFamily = { ...family, members: remainingMembers, updatedAt: Date.now() };
+      if (db) {
+        try {
+          await updateDoc(doc(db, 'families', currentFamId), {
+            members: remainingMembers,
+            updatedAt: Date.now(),
+          });
+        } catch {
+          // ignore
+        }
+      }
+      localStorage.removeItem(`${LOCAL_STORAGE_FAMILY_KEY}_${currentFamId}`);
+    }
+
+    setFamily(null);
+    await updateUserProfile({
+      familyId: undefined,
+      familyRole: undefined,
+      familyName: undefined,
+    });
   };
 
   return (
@@ -336,6 +616,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       value={{
         user,
         userProfile,
+        family,
         isAuthenticated: !!user,
         isPinLocked,
         isPinConfigured,
@@ -349,6 +630,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         lockSession,
         updateCurrency,
         updateMonthlyBudget,
+        updateUserProfile,
+        createFamily,
+        joinFamily,
+        leaveFamily,
       }}
     >
       {children}
