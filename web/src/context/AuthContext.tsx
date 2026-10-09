@@ -18,7 +18,7 @@ import {
 } from 'firebase/firestore';
 import { auth, db, isFirebaseConfigured } from '../lib/firebase';
 import { generateSalt, hashString, verifyHash } from '../lib/crypto';
-import { UserProfile, ExpenseMode, Gender, FamilyGroup } from '../types';
+import { UserProfile, ExpenseMode, Gender, FamilyGroup, FamilyMember } from '../types';
 
 interface AuthContextType {
   user: { uid: string; email: string } | null;
@@ -81,6 +81,21 @@ const formatFirebaseError = (error: any): string => {
     default:
       return error?.message || 'Authentication failed. Please try again.';
   }
+};
+
+const cleanForFirestore = <T,>(obj: T): T => {
+  if (obj === undefined) return null as unknown as T;
+  if (obj === null || typeof obj !== 'object') return obj;
+  if (Array.isArray(obj)) {
+    return obj.map(cleanForFirestore) as unknown as T;
+  }
+  const result: Record<string, any> = {};
+  for (const [key, val] of Object.entries(obj)) {
+    if (val !== undefined) {
+      result[key] = cleanForFirestore(val);
+    }
+  }
+  return result as T;
 };
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -321,7 +336,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Save to Firestore in real-time
     if (db) {
       try {
-        await setDoc(doc(db, 'users', user.uid), newProfile);
+        await setDoc(doc(db, 'users', user.uid), cleanForFirestore(newProfile));
       } catch (err: any) {
         console.warn('Note: Profile saved locally. Firestore cloud sync notice:', err.message);
       }
@@ -357,7 +372,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     if (db && user) {
       try {
-        await setDoc(doc(db, 'users', user.uid), updatedProfile);
+        await setDoc(doc(db, 'users', user.uid), cleanForFirestore(updatedProfile));
       } catch (err: any) {
         console.warn('Note: PIN updated locally. Firestore sync notice:', err.message);
       }
@@ -394,7 +409,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     if (db && user) {
       try {
-        await setDoc(doc(db, 'users', user.uid), updated, { merge: true });
+        await setDoc(doc(db, 'users', user.uid), cleanForFirestore(updated), { merge: true });
       } catch (err: any) {
         console.warn('Profile sync notice:', err.message);
       }
@@ -402,14 +417,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // If profile name or avatar updated and user belongs to a family, sync inside family document
     if (family && updated.familyId) {
-      const updatedMembers = family.members.map((m) =>
+      const updatedMembers: FamilyMember[] = family.members.map((m) =>
         m.uid === uid
           ? {
               ...m,
               displayName: updated.displayName || m.displayName,
-              photoUrl: updated.photoUrl || m.photoUrl,
-              phoneNumber: updated.phoneNumber || m.phoneNumber,
-              gender: updated.gender || m.gender,
+              photoUrl: updated.photoUrl || m.photoUrl || undefined,
+              phoneNumber: updated.phoneNumber || m.phoneNumber || undefined,
+              gender: updated.gender || m.gender || undefined,
             }
           : m
       );
@@ -418,10 +433,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       localStorage.setItem(`${LOCAL_STORAGE_FAMILY_KEY}_${family.id}`, JSON.stringify(updatedFamily));
       if (db) {
         try {
-          await updateDoc(doc(db, 'families', family.id), {
+          await updateDoc(doc(db, 'families', family.id), cleanForFirestore({
             members: updatedMembers,
             updatedAt: Date.now(),
-          });
+          }));
         } catch {
           // ignore
         }
@@ -451,13 +466,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const randomDigits = Math.floor(1000 + Math.random() * 9000);
     const inviteCode = `FS${randomDigits}`;
 
-    const headMember = {
+    const headMember: FamilyMember = {
       uid: user.uid,
       displayName: userProfile?.displayName || user.email.split('@')[0] || 'Family Head',
-      role: 'head' as const,
-      photoUrl: userProfile?.photoUrl,
-      phoneNumber: userProfile?.phoneNumber,
-      gender: userProfile?.gender,
+      role: 'head',
+      photoUrl: userProfile?.photoUrl || undefined,
+      phoneNumber: userProfile?.phoneNumber || undefined,
+      gender: userProfile?.gender || undefined,
       joinedAt: Date.now(),
     };
 
@@ -472,6 +487,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       updatedAt: Date.now(),
     };
 
+    if (db) {
+      try {
+        await setDoc(doc(db, 'families', familyId), cleanForFirestore(newFamily));
+      } catch (err: any) {
+        console.error('Firestore family creation error:', err);
+        return { success: false, error: err.message || 'Failed to create family in cloud.' };
+      }
+    }
+
     setFamily(newFamily);
     localStorage.setItem(`${LOCAL_STORAGE_FAMILY_KEY}_${familyId}`, JSON.stringify(newFamily));
 
@@ -480,14 +504,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       familyRole: 'head',
       familyName: newFamily.name,
     });
-
-    if (db) {
-      try {
-        await setDoc(doc(db, 'families', familyId), newFamily);
-      } catch (err: any) {
-        console.warn('Firestore family creation notice:', err.message);
-      }
-    }
 
     return { success: true, family: newFamily };
   };
@@ -506,7 +522,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const q = query(collection(db, 'families'), where('inviteCode', '==', cleanCode));
         const snap = await getDocs(q);
         if (!snap.empty) {
-          foundFamily = snap.docs[0].data() as FamilyGroup;
+          foundFamily = { id: snap.docs[0].id, ...(snap.docs[0].data() as any) } as FamilyGroup;
         }
       } catch (err: any) {
         console.warn('Firestore family query notice:', err.message);
@@ -538,13 +554,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       };
     }
 
-    const currentMember = {
+    const currentMember: FamilyMember = {
       uid: user.uid,
       displayName: userProfile?.displayName || user.email.split('@')[0] || 'Family Member',
-      role: 'member' as const,
-      photoUrl: userProfile?.photoUrl,
-      phoneNumber: userProfile?.phoneNumber,
-      gender: userProfile?.gender,
+      role: 'member',
+      photoUrl: userProfile?.photoUrl || undefined,
+      phoneNumber: userProfile?.phoneNumber || undefined,
+      gender: userProfile?.gender || undefined,
       joinedAt: Date.now(),
     };
 
@@ -559,6 +575,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       updatedAt: Date.now(),
     };
 
+    if (db) {
+      try {
+        await updateDoc(doc(db, 'families', foundFamily.id), cleanForFirestore({
+          members: updatedMembers,
+          updatedAt: Date.now(),
+        }));
+      } catch (err: any) {
+        console.error('Firestore join family update error:', err);
+        return { success: false, error: err.message || 'Failed to update family in cloud.' };
+      }
+    }
+
     setFamily(updatedFamily);
     localStorage.setItem(`${LOCAL_STORAGE_FAMILY_KEY}_${foundFamily.id}`, JSON.stringify(updatedFamily));
 
@@ -567,17 +595,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       familyRole: 'member',
       familyName: foundFamily.name,
     });
-
-    if (db) {
-      try {
-        await updateDoc(doc(db, 'families', foundFamily.id), {
-          members: updatedMembers,
-          updatedAt: Date.now(),
-        });
-      } catch (err: any) {
-        console.warn('Firestore join family update notice:', err.message);
-      }
-    }
 
     return { success: true, family: updatedFamily };
   };
@@ -592,10 +609,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const updatedFamily = { ...family, members: remainingMembers, updatedAt: Date.now() };
       if (db) {
         try {
-          await updateDoc(doc(db, 'families', currentFamId), {
+          await updateDoc(doc(db, 'families', currentFamId), cleanForFirestore({
             members: remainingMembers,
             updatedAt: Date.now(),
-          });
+          }));
         } catch {
           // ignore
         }
