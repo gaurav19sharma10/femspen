@@ -28,13 +28,18 @@ export const RecurringBills: React.FC<RecurringBillsProps> = ({
   }, 0);
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4">
       <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
+        initial={{ opacity: 0, scale: 0.95, y: 15 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95 }}
-        className="w-full max-w-lg bg-white rounded-3xl border border-gray-200/90 shadow-2xl p-6 overflow-hidden flex flex-col max-h-[85vh]"
+        className="w-full max-w-lg bg-white rounded-t-3xl sm:rounded-3xl border border-gray-200/90 shadow-2xl p-6 overflow-hidden flex flex-col max-h-[92vh]"
       >
+        {/* Mobile drag handle */}
+        <div className="sm:hidden flex justify-center -mt-2 pb-3">
+          <div className="w-12 h-1.5 bg-gray-300 rounded-full" />
+        </div>
+
         {/* Header */}
         <div className="flex items-center justify-between pb-4 border-b border-gray-100">
           <div className="flex items-center gap-2.5">

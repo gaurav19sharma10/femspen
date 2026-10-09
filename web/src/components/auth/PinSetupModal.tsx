@@ -46,8 +46,12 @@ export const PinSetupModal: React.FC = () => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
-      <div className="bg-white rounded-3xl border border-gray-200 max-w-md w-full p-7 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4">
+      <div className="bg-white rounded-t-3xl sm:rounded-3xl border border-gray-200 max-w-md w-full p-6 sm:p-7 shadow-2xl animate-in fade-in zoom-in-95 duration-200 max-h-[92vh] overflow-y-auto">
+        {/* Mobile drag handle */}
+        <div className="sm:hidden flex justify-center -mt-2 pb-3">
+          <div className="w-12 h-1.5 bg-gray-300 rounded-full" />
+        </div>
         <div className="flex flex-col items-center text-center mb-6">
           <FemSpenVaultArt size={90} className="mb-2" />
           <h2 className="text-xl font-bold text-gray-900">Set Up 2FA Security PIN</h2>

@@ -41,7 +41,7 @@ export const ExpenseCard: React.FC<ExpenseCardProps> = ({ expense, onEdit }) => 
           className={`p-1.5 rounded-full transition-opacity cursor-pointer ${
             expense.isPinned
               ? 'text-[#0057FF] opacity-100'
-              : 'text-gray-400 hover:text-gray-700 opacity-0 group-hover:opacity-100'
+              : 'text-gray-400 hover:text-gray-700 opacity-70 sm:opacity-0 sm:group-hover:opacity-100'
           }`}
           title={expense.isPinned ? 'Unpin expense' : 'Pin expense to top'}
         >
