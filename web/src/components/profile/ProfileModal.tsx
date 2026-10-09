@@ -182,22 +182,25 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ onClose }) => {
   const isHead = userProfile?.familyRole === 'head' || family?.headUserId === user?.uid;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
+    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4">
       <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.95 }}
-        className="w-full max-w-2xl bg-white rounded-3xl border border-gray-200/90 shadow-2xl overflow-hidden flex flex-col max-h-[92vh]"
+        initial={{ opacity: 0, scale: 0.95, y: 30 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: 30 }}
+        className="w-full max-w-2xl bg-white rounded-t-3xl sm:rounded-3xl border-t sm:border border-gray-200/90 shadow-2xl overflow-hidden flex flex-col max-h-[94vh] sm:max-h-[92vh]"
       >
+        {/* Mobile Sheet Handle */}
+        <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mt-2.5 sm:hidden" />
+
         {/* Header */}
-        <div className="flex items-center justify-between p-5 pb-3 border-b border-gray-100">
+        <div className="flex items-center justify-between p-4 sm:p-5 pb-3 border-b border-gray-100">
           <div className="flex items-center gap-2.5">
             <div className="p-2 rounded-xl bg-blue-50 text-[#0057FF]">
               <User size={20} />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-gray-900">User Profile & Family Hub</h2>
-              <p className="text-xs text-gray-500">{user?.email}</p>
+              <h2 className="text-base sm:text-lg font-bold text-gray-900">User Profile & Family Hub</h2>
+              <p className="text-[11px] sm:text-xs text-gray-500">{user?.email}</p>
             </div>
           </div>
 

@@ -23,6 +23,7 @@ import { WalletModal } from './components/wallet/WalletModal';
 import { AddMoneyModal } from './components/wallet/AddMoneyModal';
 import { TransferMoneyModal } from './components/wallet/TransferMoneyModal';
 import { RequestMoneyModal } from './components/wallet/RequestMoneyModal';
+import { MobileBottomNav } from './components/common/MobileBottomNav';
 import { Expense } from './types';
 import { Plus } from 'lucide-react';
 import { motion } from 'framer-motion';
@@ -96,7 +97,7 @@ const MainAppContent: React.FC = () => {
         onOpenWallet={() => setIsWalletOpen(true)}
       />
 
-      <main className="flex-1 max-w-6xl w-full mx-auto px-4 pt-3">
+      <main className="flex-1 max-w-6xl w-full mx-auto px-3 sm:px-4 pt-2.5 sm:pt-3 pb-28 md:pb-8">
         {/* Horizontal Wallet Pill Widget */}
         <WalletPill
           onOpenWallet={() => setIsWalletOpen(true)}
@@ -129,7 +130,7 @@ const MainAppContent: React.FC = () => {
         whileHover={{ scale: 1.05 }}
         whileTap={{ scale: 0.95 }}
         onClick={handleOpenNew}
-        className="fixed bottom-6 right-6 z-40 w-14 h-14 rounded-2xl bg-[#0057FF] hover:bg-[#0046D1] text-white shadow-xl shadow-[#0057FF]/35 flex items-center justify-center cursor-pointer transition-colors"
+        className="fixed bottom-20 right-4 md:bottom-6 md:right-6 z-40 w-13 h-13 sm:w-14 sm:h-14 rounded-2xl bg-[#0057FF] hover:bg-[#0046D1] text-white shadow-xl shadow-[#0057FF]/35 flex items-center justify-center cursor-pointer transition-colors"
         title="Record New Expense"
       >
         <Plus size={26} strokeWidth={2.5} />
@@ -213,6 +214,17 @@ const MainAppContent: React.FC = () => {
       <RequestMoneyModal
         isOpen={isWalletRequestOpen}
         onClose={() => setIsWalletRequestOpen(false)}
+      />
+
+      {/* Smartphone Bottom Navigation Bar (Hidden on desktop) */}
+      <MobileBottomNav
+        onOpenFeed={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+        onOpenWallet={() => setIsWalletOpen(true)}
+        onOpenGoals={() => setIsGoalsOpen(true)}
+        onOpenAnalytics={() => setIsAnalyticsOpen(true)}
+        onOpenSettings={() => setIsSettingsOpen(true)}
+        onOpenRecurring={() => setIsRecurringOpen(true)}
+        onOpenProfile={() => setIsProfileOpen(true)}
       />
     </div>
   );

@@ -51,82 +51,97 @@ export const KeepHeader: React.FC<KeepHeaderProps> = ({
 
 
   return (
-    <header className="sticky top-0 z-30 bg-[#F8F7F4]/90 backdrop-blur-md border-b border-gray-200/60 px-4 py-3 transition-colors">
-      <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-3">
+    <header className="sticky top-0 z-30 bg-[#F8F7F4]/95 backdrop-blur-md border-b border-gray-200/60 px-3 sm:px-4 py-2 sm:py-3 transition-colors">
+      <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-2.5 sm:gap-3">
         {/* Brand Logo & Mode Pill Switcher */}
-        <div className="flex items-center justify-between w-full md:w-auto gap-4">
-          <div className="flex items-center gap-2.5">
-            <FemSpenLogo size={36} />
+        <div className="flex items-center justify-between w-full md:w-auto gap-2">
+          <div className="flex items-center gap-2">
+            <FemSpenLogo size={32} />
             <div>
-              <h1 className="text-base font-black text-gray-900 leading-tight">FemSpen</h1>
-              <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider block">
-                Real-time Ledger
+              <h1 className="text-sm sm:text-base font-black text-gray-900 leading-tight">FemSpen</h1>
+              <span className="text-[9px] sm:text-[10px] font-semibold text-gray-500 uppercase tracking-wider block">
+                {currentMode === 'individual' ? 'Personal' : 'Family'}
               </span>
             </div>
           </div>
 
           {/* Mode Pill Toggle (Google Keep style) */}
-          <div className="bg-gray-200/80 p-1 rounded-2xl flex items-center shadow-inner relative">
+          <div className="bg-gray-200/80 p-0.5 sm:p-1 rounded-xl sm:rounded-2xl flex items-center shadow-inner relative">
             <button
               onClick={() => setCurrentMode('individual')}
-              className={`relative z-10 px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer ${
+              className={`relative z-10 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-semibold flex items-center gap-1 transition-colors cursor-pointer ${
                 currentMode === 'individual' ? 'text-gray-900' : 'text-gray-600 hover:text-gray-900'
               }`}
             >
               {currentMode === 'individual' && (
                 <motion.div
                   layoutId="mode-pill-bg"
-                  className="absolute inset-0 bg-white rounded-xl shadow-xs"
+                  className="absolute inset-0 bg-white rounded-lg sm:rounded-xl shadow-xs"
                   transition={{ type: 'spring', stiffness: 450, damping: 35 }}
                 />
               )}
-              <User size={13} className="relative z-10 text-[#0057FF]" />
-              <span className="relative z-10">Individual</span>
+              <User size={12} className="relative z-10 text-[#0057FF]" />
+              <span className="relative z-10">Me</span>
             </button>
 
             <button
               onClick={() => setCurrentMode('family')}
-              className={`relative z-10 px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer ${
+              className={`relative z-10 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-semibold flex items-center gap-1 transition-colors cursor-pointer ${
                 currentMode === 'family' ? 'text-gray-900' : 'text-gray-600 hover:text-gray-900'
               }`}
             >
               {currentMode === 'family' && (
                 <motion.div
                   layoutId="mode-pill-bg"
-                  className="absolute inset-0 bg-white rounded-xl shadow-xs"
+                  className="absolute inset-0 bg-white rounded-lg sm:rounded-xl shadow-xs"
                   transition={{ type: 'spring', stiffness: 450, damping: 35 }}
                 />
               )}
-              <Users size={13} className="relative z-10 text-emerald-600" />
+              <Users size={12} className="relative z-10 text-emerald-600" />
               <span className="relative z-10">Family</span>
             </button>
           </div>
+
+          {/* Mobile Profile Avatar Trigger (tap opens Profile directly on phones) */}
+          <button
+            onClick={onOpenProfile}
+            className="md:hidden flex items-center justify-center p-0.5 rounded-full border border-gray-200/80 bg-white shadow-xs cursor-pointer"
+            title="Profile & Family Hub"
+          >
+            <div className="w-7 h-7 rounded-full bg-blue-100 text-[#0057FF] font-bold text-xs flex items-center justify-center overflow-hidden shrink-0">
+              {userProfile?.photoUrl ? (
+                <img src={userProfile.photoUrl} alt="" className="w-full h-full object-cover" />
+              ) : (
+                (userProfile?.displayName || userProfile?.email || 'U')[0].toUpperCase()
+              )}
+            </div>
+          </button>
         </div>
 
         {/* Google Keep Search Omnibar */}
         <div className="w-full md:flex-1 max-w-xl">
-          <div className="relative flex items-center bg-white/90 hover:bg-white focus-within:bg-white border border-gray-200/80 rounded-2xl shadow-xs transition-all focus-within:ring-2 focus-within:ring-[#0057FF]/20 focus-within:border-[#0057FF]">
-            <Search size={18} className="absolute left-3.5 text-gray-400" />
+          <div className="relative flex items-center bg-white hover:bg-white focus-within:bg-white border border-gray-200/80 rounded-2xl shadow-xs transition-all focus-within:ring-2 focus-within:ring-[#0057FF]/20 focus-within:border-[#0057FF]">
+            <Search size={16} className="absolute left-3.5 text-gray-400" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search expenses, notes, categories, tags..."
-              className="w-full pl-10 pr-9 py-2.5 bg-transparent text-sm text-gray-900 placeholder-gray-400 focus:outline-none"
+              placeholder="Search expenses, notes, categories..."
+              className="w-full pl-9 pr-8 py-2 sm:py-2.5 bg-transparent text-xs sm:text-sm text-gray-900 placeholder-gray-400 focus:outline-none"
             />
             {searchQuery && (
               <button
                 onClick={() => setSearchQuery('')}
                 className="absolute right-3 text-gray-400 hover:text-gray-600 p-1 rounded-full cursor-pointer"
               >
-                <X size={15} />
+                <X size={14} />
               </button>
             )}
           </div>
         </div>
 
-        {/* Action Buttons & Quick Stats */}
-        <div className="flex items-center gap-1.5 self-end md:self-auto">
+        {/* Action Buttons & Quick Stats (Desktop & Tablet only - Mobile uses MobileBottomNav!) */}
+        <div className="hidden md:flex items-center gap-1.5 self-end md:self-auto">
           <div className="hidden lg:flex flex-col text-right pr-2">
             <span className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">
               {currentMode === 'individual' ? 'My Spend' : 'Family Spend'}

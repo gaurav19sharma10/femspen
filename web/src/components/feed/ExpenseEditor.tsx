@@ -204,15 +204,18 @@ export const ExpenseEditor: React.FC<ExpenseEditorProps> = ({
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
+      <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4">
         <motion.div
-          initial={{ opacity: 0, scale: 0.95, y: 20 }}
+          initial={{ opacity: 0, scale: 0.95, y: 30 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.95, y: 20 }}
+          exit={{ opacity: 0, scale: 0.95, y: 30 }}
           transition={{ type: 'spring', damping: 25, stiffness: 350 }}
-          className="w-full max-w-lg rounded-3xl border border-gray-300/80 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+          className="w-full max-w-lg rounded-t-3xl sm:rounded-3xl border-t sm:border border-gray-300/80 shadow-2xl overflow-hidden flex flex-col max-h-[92vh] sm:max-h-[90vh]"
           style={{ backgroundColor: color }}
         >
+          {/* Mobile Sheet Handle */}
+          <div className="w-10 h-1 bg-gray-400/30 rounded-full mx-auto mt-2.5 sm:hidden" />
+
           {/* Header Controls */}
           <div className="flex items-center justify-between p-4 pb-2">
             <span className="text-xs font-bold uppercase tracking-wider text-gray-500">

@@ -190,23 +190,26 @@ export const WalletModal: React.FC<WalletModalProps> = ({ isOpen, onClose }) => 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
+    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4">
       <motion.div
-        initial={{ opacity: 0, scale: 0.96, y: 15 }}
+        initial={{ opacity: 0, scale: 0.96, y: 30 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.96 }}
-        className="bg-[#F8F7F4] rounded-3xl max-w-4xl w-full shadow-2xl border border-gray-200/80 overflow-hidden flex flex-col max-h-[92vh]"
+        exit={{ opacity: 0, scale: 0.96, y: 30 }}
+        className="bg-[#F8F7F4] rounded-t-3xl sm:rounded-3xl max-w-4xl w-full shadow-2xl border-t sm:border border-gray-200/80 overflow-hidden flex flex-col max-h-[94vh] sm:max-h-[92vh]"
       >
+        {/* Mobile Sheet Handle */}
+        <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mt-2.5 sm:hidden" />
+
         {/* Top Header */}
-        <div className="px-6 py-4.5 bg-white border-b border-gray-200/70 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-2xl bg-[#0057FF]/10 text-[#0057FF] flex items-center justify-center font-bold text-xl shadow-inner">
-              <WalletIcon size={22} />
+        <div className="px-4 sm:px-6 py-3.5 sm:py-4.5 bg-white border-b border-gray-200/70 flex items-center justify-between">
+          <div className="flex items-center gap-2.5 sm:gap-3">
+            <div className="w-9 sm:w-11 h-9 sm:h-11 rounded-xl sm:rounded-2xl bg-[#0057FF]/10 text-[#0057FF] flex items-center justify-center font-bold text-lg sm:text-xl shadow-inner">
+              <WalletIcon size={20} />
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-xl font-black text-gray-900 leading-tight">My Wallet</h1>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-[#0057FF] border border-blue-200 uppercase tracking-wider">
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                <h1 className="text-lg sm:text-xl font-black text-gray-900 leading-tight">My Wallet</h1>
+                <span className="px-2 py-0.5 rounded-full text-[9px] sm:text-[10px] font-bold bg-blue-50 text-[#0057FF] border border-blue-200 uppercase tracking-wider">
                   {isFamilyMode ? (isHead ? '👑 Family Head' : 'Family Member') : 'Individual'}
                 </span>
                 {currentWallet?.status === 'frozen' && (
