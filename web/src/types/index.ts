@@ -133,3 +133,118 @@ export const SECURITY_QUESTIONS = [
   'What was the model of your first car?',
   'What is the street name where you grew up?'
 ];
+
+// ==========================================
+// GOALS & SAVINGS SYSTEM TYPES
+// ==========================================
+
+export type GoalType = 'individual' | 'group';
+export type GoalStatus = 'active' | 'completed' | 'paused' | 'closed' | 'cancelled';
+export type GoalTransactionType =
+  | 'MANUAL_CONTRIBUTION'
+  | 'DAILY_CONTRIBUTION'
+  | 'MONTHLY_CONTRIBUTION'
+  | 'ROUND_UP'
+  | 'WITHDRAWAL'
+  | 'SPENDING_REQUEST'
+  | 'SPENDING_APPROVED'
+  | 'SPENDING_REJECTED'
+  | 'REFUND'
+  | 'ADJUSTMENT';
+
+export interface GoalFundingMethod {
+  manual: boolean;
+  dailySaving?: {
+    enabled: boolean;
+    amount: number;
+  };
+  monthlySaving?: {
+    enabled: boolean;
+    amount: number;
+    dayOfMonth: number;
+  };
+  roundUpSaving?: {
+    enabled: boolean;
+  };
+}
+
+export interface GoalParticipant {
+  uid: string;
+  name: string;
+  photoUrl?: string;
+  role?: 'owner' | 'contributor';
+}
+
+export interface SpendingRequest {
+  id: string;
+  goalId: string;
+  requestedByUid: string;
+  requestedByName: string;
+  amount: number;
+  reason: string;
+  notes?: string;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  approvals: Record<string, 'APPROVED' | 'REJECTED' | 'PENDING'>;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface GoalTransaction {
+  id: string;
+  goalId: string;
+  userId: string;
+  userName: string;
+  amount: number;
+  type: GoalTransactionType;
+  expenseId?: string;
+  source?: string;
+  notes?: string;
+  timestamp: number;
+}
+
+export interface Goal {
+  id: string;
+  title: string;
+  icon: string;
+  category: string;
+  targetAmount: number;
+  currentAmount: number;
+  targetDate?: string; // YYYY-MM-DD
+  type: GoalType;
+  ownerUid: string;
+  ownerName: string;
+  participantUids: string[];
+  participants: GoalParticipant[];
+  familyId?: string;
+  fundingMethod: GoalFundingMethod;
+  status: GoalStatus;
+  spendingRequests?: SpendingRequest[];
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface RoundUpSettings {
+  enabled: boolean;
+  roundTo: number; // 10, 50, 100, 500, or custom
+  destination: 'all' | 'specific';
+  targetGoalId?: string;
+  allocations?: Record<string, number>;
+}
+
+export const GOAL_CATEGORIES = [
+  { id: 'Home', name: 'Home', icon: '🏠', color: '#6366F1' },
+  { id: 'Vehicle', name: 'Vehicle', icon: '🚗', color: '#0EA5E9' },
+  { id: 'Education', name: 'Education', icon: '🎓', color: '#10B981' },
+  { id: 'Travel', name: 'Travel', icon: '✈️', color: '#F59E0B' },
+  { id: 'Events', name: 'Events', icon: '🎉', color: '#EC4899' },
+  { id: 'Electronics', name: 'Electronics', icon: '💻', color: '#3B82F6' },
+  { id: 'Emergency', name: 'Emergency', icon: '💰', color: '#EF4444' },
+  { id: 'Shopping', name: 'Shopping', icon: '🛍️', color: '#8B5CF6' },
+  { id: 'Family', name: 'Family', icon: '❤️', color: '#F43F5E' },
+  { id: 'Other', name: 'Other', icon: '📦', color: '#64748B' },
+];
+
+export const POPULAR_GOAL_EMOJIS = [
+  '🎓', '🏖️', '📱', '🚗', '🏠', '🎂', '💰', '💍', '💻', '✈️', '🚴', '🎸', '🎁', '🏖️', '🏥', '🚀'
+];
+

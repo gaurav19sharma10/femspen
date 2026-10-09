@@ -16,12 +16,14 @@ import {
 import { formatCurrency } from '../../utils/currency';
 import { exportExpensesToCSV } from '../../utils/export';
 import { FemSpenLogo } from '../common/VectorArt';
+import { useGoal } from '../../context/GoalContext';
 
 interface KeepHeaderProps {
   onOpenAnalytics: () => void;
   onOpenRecurring: () => void;
   onOpenSettings: () => void;
   onOpenProfile: () => void;
+  onOpenGoals: () => void;
 }
 
 export const KeepHeader: React.FC<KeepHeaderProps> = ({
@@ -29,9 +31,12 @@ export const KeepHeader: React.FC<KeepHeaderProps> = ({
   onOpenRecurring,
   onOpenSettings,
   onOpenProfile,
+  onOpenGoals,
 }) => {
   const { currentMode, setCurrentMode, searchQuery, setSearchQuery, stats, expenses } = useExpense();
   const { lockSession, userProfile } = useAuth();
+  const { pendingApprovalCount } = useGoal();
+
 
   return (
     <header className="sticky top-0 z-30 bg-[#F8F7F4]/90 backdrop-blur-md border-b border-gray-200/60 px-4 py-3 transition-colors">
@@ -128,11 +133,15 @@ export const KeepHeader: React.FC<KeepHeaderProps> = ({
           </button>
 
           <button
-            onClick={onOpenRecurring}
-            className="p-2.5 bg-white hover:bg-gray-100 border border-gray-200/80 rounded-xl text-gray-700 hover:text-[#0057FF] transition-colors cursor-pointer shadow-xs"
-            title="Recurring Subscriptions"
+            onClick={onOpenGoals}
+            className="flex items-center gap-1.5 px-3 py-2 bg-gradient-to-r from-blue-50 to-indigo-50/80 hover:from-blue-100 hover:to-indigo-100 border border-blue-200/80 rounded-xl text-gray-800 hover:text-[#0057FF] transition-all cursor-pointer shadow-xs relative"
+            title="Goals & Target Savings"
           >
-            <CalendarClock size={17} />
+            <span className="text-sm">🎯</span>
+            <span className="text-xs font-bold hidden sm:inline">Goals</span>
+            {pendingApprovalCount > 0 && (
+              <span className="w-2 h-2 rounded-full bg-amber-500 absolute -top-0.5 -right-0.5 ring-2 ring-white animate-pulse" />
+            )}
           </button>
 
           <button

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { GoalProvider } from './context/GoalContext';
 import { ExpenseProvider, useExpense } from './context/ExpenseContext';
 import { AuthScreen } from './components/auth/AuthScreen';
 import { PinLockScreen } from './components/auth/PinLockScreen';
@@ -12,6 +13,10 @@ import { SpendCharts } from './components/analytics/SpendCharts';
 import { RecurringBills } from './components/recurring/RecurringBills';
 import { SettingsModal } from './components/settings/SettingsModal';
 import { ProfileModal } from './components/profile/ProfileModal';
+import { GoalsDashboard } from './components/goals/GoalsDashboard';
+import { CreateGoalWizard } from './components/goals/CreateGoalWizard';
+import { GoalsFeedWidget } from './components/goals/GoalsFeedWidget';
+import { RoundUpToast } from './components/goals/RoundUpToast';
 import { Expense } from './types';
 import { Plus } from 'lucide-react';
 import { motion } from 'framer-motion';
@@ -24,6 +29,8 @@ const MainAppContent: React.FC = () => {
   const [isRecurringOpen, setIsRecurringOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [isGoalsOpen, setIsGoalsOpen] = useState(false);
+  const [isCreateGoalOpen, setIsCreateGoalOpen] = useState(false);
 
   if (loading) {
     return (
@@ -75,9 +82,16 @@ const MainAppContent: React.FC = () => {
         onOpenRecurring={() => setIsRecurringOpen(true)}
         onOpenSettings={() => setIsSettingsOpen(true)}
         onOpenProfile={() => setIsProfileOpen(true)}
+        onOpenGoals={() => setIsGoalsOpen(true)}
       />
 
       <main className="flex-1 max-w-6xl w-full mx-auto px-4 pt-3">
+        {/* Compact Goals Progress Widget */}
+        <GoalsFeedWidget
+          onOpenGoals={() => setIsGoalsOpen(true)}
+          onCreateGoal={() => setIsCreateGoalOpen(true)}
+        />
+
         {/* Category & Color Filter Pills */}
         <FilterPills />
 
@@ -134,6 +148,28 @@ const MainAppContent: React.FC = () => {
       {isProfileOpen && (
         <ProfileModal onClose={() => setIsProfileOpen(false)} />
       )}
+
+      {/* Goals Dashboard Modal */}
+      {isGoalsOpen && (
+        <GoalsDashboard
+          isOpen={isGoalsOpen}
+          onClose={() => setIsGoalsOpen(false)}
+        />
+      )}
+
+      {/* Standalone Goal Creation Wizard */}
+      {isCreateGoalOpen && (
+        <CreateGoalWizard
+          isOpen={isCreateGoalOpen}
+          onClose={() => setIsCreateGoalOpen(false)}
+          onGoalCreated={() => {
+            setIsGoalsOpen(true);
+          }}
+        />
+      )}
+
+      {/* Subtle Floating Round-Up Savings Toast */}
+      <RoundUpToast onOpenGoals={() => setIsGoalsOpen(true)} />
     </div>
   );
 };
@@ -141,9 +177,11 @@ const MainAppContent: React.FC = () => {
 export function App() {
   return (
     <AuthProvider>
-      <ExpenseProvider>
-        <MainAppContent />
-      </ExpenseProvider>
+      <GoalProvider>
+        <ExpenseProvider>
+          <MainAppContent />
+        </ExpenseProvider>
+      </GoalProvider>
     </AuthProvider>
   );
 }

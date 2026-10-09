@@ -16,6 +16,7 @@ import {
   Check,
 } from 'lucide-react';
 import { getCurrencySymbol } from '../../utils/currency';
+import { useGoal } from '../../context/GoalContext';
 
 interface ExpenseEditorProps {
   initialExpense: Expense | null;
@@ -30,6 +31,8 @@ export const ExpenseEditor: React.FC<ExpenseEditorProps> = ({
 }) => {
   const { addExpense, updateExpense, deleteExpense, currentMode } = useExpense();
   const { userProfile, family } = useAuth();
+  const { processExpenseRoundUp, roundUpSettings, activeGoals } = useGoal();
+
 
   const memberOptions = React.useMemo(() => {
     if (family?.members && family.members.length > 0) {
@@ -118,7 +121,7 @@ export const ExpenseEditor: React.FC<ExpenseEditorProps> = ({
           receiptUrl,
         });
       } else {
-        await addExpense({
+        const createdId = await addExpense({
           title: title.trim() || 'Untitled Expense',
           amount: parsedAmount,
           currency: userProfile?.currency || 'INR',
@@ -133,6 +136,15 @@ export const ExpenseEditor: React.FC<ExpenseEditorProps> = ({
           recurringInterval: isRecurring ? recurringInterval : undefined,
           receiptUrl,
         });
+
+        // Trigger automatic round-up allocation to active Goals
+        if (createdId && parsedAmount > 0) {
+          try {
+            await processExpenseRoundUp(createdId, parsedAmount);
+          } catch (roundErr) {
+            console.warn('Round-up processing note:', roundErr);
+          }
+        }
       }
       onClose();
     } finally {
@@ -235,6 +247,22 @@ export const ExpenseEditor: React.FC<ExpenseEditorProps> = ({
                   className="w-full px-3 py-1.5 bg-white/80 rounded-xl text-xs font-medium text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#0057FF]/30"
                 />
               </div>
+
+              {(() => {
+                const parsedNum = parseFloat(amount) || 0;
+                const roundTo = roundUpSettings?.roundTo || 100;
+                const simulatedCeil = Math.ceil(parsedNum / roundTo) * roundTo;
+                const roundDiff = roundUpSettings?.enabled && activeGoals.length > 0 && parsedNum > 0 ? simulatedCeil - parsedNum : 0;
+                if (roundDiff > 0) {
+                  return (
+                    <div className="col-span-2 flex items-center gap-1.5 text-[11px] font-semibold text-amber-800 bg-amber-50 px-2.5 py-1.5 rounded-xl border border-amber-200/70">
+                      <span>💰</span>
+                      <span>₹{roundDiff} spare change will be automatically saved toward your Goals</span>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
