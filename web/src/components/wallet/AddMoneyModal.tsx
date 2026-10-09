@@ -31,8 +31,6 @@ export const AddMoneyModal: React.FC<AddMoneyModalProps> = ({ isOpen, onClose })
   const [step, setStep] = useState<'input' | 'confirm'>('input');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  if (!isOpen) return null;
-
   const parsedAmount = parseFloat(amount) || 0;
   const currentBalance = currentWallet?.balance ?? 0;
   const resultingBalance = Math.round((currentBalance + parsedAmount) * 100) / 100;
@@ -58,6 +56,8 @@ export const AddMoneyModal: React.FC<AddMoneyModalProps> = ({ isOpen, onClose })
       setIsSubmitting(false);
     }
   };
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">

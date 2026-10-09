@@ -41,8 +41,6 @@ export const TransferMoneyModal: React.FC<TransferMoneyModalProps> = ({
   const [step, setStep] = useState<'input' | 'confirm'>('input');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  if (!isOpen) return null;
-
   const parsedAmount = parseFloat(amount) || 0;
   const headBalance = currentWallet?.balance ?? 0;
   const isInsufficient = parsedAmount > headBalance;
@@ -74,6 +72,8 @@ export const TransferMoneyModal: React.FC<TransferMoneyModalProps> = ({
       setIsSubmitting(false);
     }
   };
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">

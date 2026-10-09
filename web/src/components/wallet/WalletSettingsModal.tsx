@@ -77,8 +77,6 @@ export const WalletSettingsModal: React.FC<WalletSettingsModalProps> = ({ isOpen
 
   const [isSaving, setIsSaving] = useState(false);
 
-  if (!isOpen) return null;
-
   const handleMemberChange = (uid: string) => {
     setSelectedMemberUid(uid);
     const mLimits = spendingLimits[uid];
@@ -117,6 +115,8 @@ export const WalletSettingsModal: React.FC<WalletSettingsModalProps> = ({ isOpen
       setIsSaving(false);
     }
   };
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">

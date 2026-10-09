@@ -30,8 +30,6 @@ export const RequestMoneyModal: React.FC<RequestMoneyModalProps> = ({ isOpen, on
   const [urgency, setUrgency] = useState<'Low' | 'Medium' | 'High' | 'Emergency'>('Medium');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  if (!isOpen) return null;
-
   const parsedAmount = parseFloat(amount) || 0;
   const headName = family?.headName || 'Family Head';
 
@@ -58,6 +56,8 @@ export const RequestMoneyModal: React.FC<RequestMoneyModalProps> = ({ isOpen, on
       setIsSubmitting(false);
     }
   };
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">

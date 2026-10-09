@@ -81,8 +81,6 @@ export const WalletModal: React.FC<WalletModalProps> = ({ isOpen, onClose }) => 
   const [rejectingRequestId, setRejectingRequestId] = useState<string | null>(null);
   const [rejectionReason, setRejectionReason] = useState<string>('');
 
-  if (!isOpen) return null;
-
   const balance = currentWallet?.balance ?? 0;
   const isNegative = balance < 0;
 
@@ -188,6 +186,8 @@ export const WalletModal: React.FC<WalletModalProps> = ({ isOpen, onClose }) => 
       alert(err.message);
     }
   };
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">

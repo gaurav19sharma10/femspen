@@ -34,8 +34,6 @@ export const RecurringAllowanceModal: React.FC<RecurringAllowanceModalProps> = (
   const [note, setNote] = useState<string>('Monthly pocket money / allowance');
   const [isAdding, setIsAdding] = useState(false);
 
-  if (!isOpen) return null;
-
   const parsedAmount = parseFloat(amount) || 0;
   const recipientMember = otherMembers.find((m) => m.uid === recipientUid);
 
@@ -62,6 +60,8 @@ export const RecurringAllowanceModal: React.FC<RecurringAllowanceModalProps> = (
       alert(err.message);
     }
   };
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
