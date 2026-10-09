@@ -12,11 +12,13 @@ import {
   Lock,
   Settings,
   Download,
+  Wallet,
 } from 'lucide-react';
 import { formatCurrency } from '../../utils/currency';
 import { exportExpensesToCSV } from '../../utils/export';
 import { FemSpenLogo } from '../common/VectorArt';
 import { useGoal } from '../../context/GoalContext';
+import { useWallet } from '../../context/WalletContext';
 
 interface KeepHeaderProps {
   onOpenAnalytics: () => void;
@@ -24,6 +26,7 @@ interface KeepHeaderProps {
   onOpenSettings: () => void;
   onOpenProfile: () => void;
   onOpenGoals: () => void;
+  onOpenWallet: () => void;
 }
 
 export const KeepHeader: React.FC<KeepHeaderProps> = ({
@@ -32,10 +35,19 @@ export const KeepHeader: React.FC<KeepHeaderProps> = ({
   onOpenSettings,
   onOpenProfile,
   onOpenGoals,
+  onOpenWallet,
 }) => {
   const { currentMode, setCurrentMode, searchQuery, setSearchQuery, stats, expenses } = useExpense();
   const { lockSession, userProfile } = useAuth();
   const { pendingApprovalCount } = useGoal();
+  const { pendingRequests, activeRequestState, unreadNotificationCount, currentWallet } = useWallet();
+
+  const isHead = userProfile?.familyRole === 'head';
+  const hasWalletNotification =
+    unreadNotificationCount > 0 ||
+    (isHead && pendingRequests.length > 0) ||
+    activeRequestState === 'pending' ||
+    (currentWallet?.balance !== undefined && currentWallet.balance < 0);
 
 
   return (
@@ -130,6 +142,18 @@ export const KeepHeader: React.FC<KeepHeaderProps> = ({
             title="Analytics & Charts"
           >
             <PieChart size={17} />
+          </button>
+
+          <button
+            onClick={onOpenWallet}
+            className="flex items-center gap-1.5 px-3 py-2 bg-gradient-to-r from-emerald-50 to-teal-50/80 hover:from-emerald-100 hover:to-teal-100 border border-emerald-200/80 rounded-xl text-gray-800 hover:text-emerald-700 transition-all cursor-pointer shadow-xs relative"
+            title="My Wallet & Family Ledger"
+          >
+            <Wallet size={16} className="text-emerald-600" />
+            <span className="text-xs font-bold hidden sm:inline">Wallet</span>
+            {hasWalletNotification && (
+              <span className="w-2 h-2 rounded-full bg-amber-500 absolute -top-0.5 -right-0.5 ring-2 ring-white animate-pulse" />
+            )}
           </button>
 
           <button

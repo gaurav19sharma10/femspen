@@ -15,8 +15,9 @@ import {
   Image as ImageIcon,
   Check,
 } from 'lucide-react';
-import { getCurrencySymbol } from '../../utils/currency';
+import { getCurrencySymbol, formatCurrency } from '../../utils/currency';
 import { useGoal } from '../../context/GoalContext';
+import { useWallet } from '../../context/WalletContext';
 
 interface ExpenseEditorProps {
   initialExpense: Expense | null;
@@ -32,6 +33,8 @@ export const ExpenseEditor: React.FC<ExpenseEditorProps> = ({
   const { addExpense, updateExpense, deleteExpense, currentMode } = useExpense();
   const { userProfile, family } = useAuth();
   const { processExpenseRoundUp, roundUpSettings, activeGoals } = useGoal();
+  const { deductExpenseFromWallet, adjustExpenseWalletDebit, reverseExpenseWalletDebit, currentWallet } = useWallet();
+
 
 
   const memberOptions = React.useMemo(() => {
@@ -107,6 +110,7 @@ export const ExpenseEditor: React.FC<ExpenseEditorProps> = ({
 
     try {
       if (initialExpense) {
+        const oldAmount = initialExpense.amount;
         await updateExpense(initialExpense.id, {
           title: title.trim() || 'Untitled Expense',
           amount: parsedAmount,
@@ -120,7 +124,34 @@ export const ExpenseEditor: React.FC<ExpenseEditorProps> = ({
           recurringInterval: isRecurring ? recurringInterval : undefined,
           receiptUrl,
         });
+
+        // Adjust wallet debit on edit (Section 8)
+        if (oldAmount !== parsedAmount) {
+          try {
+            await adjustExpenseWalletDebit(
+              initialExpense.id,
+              oldAmount,
+              parsedAmount,
+              title.trim() || 'Untitled Expense'
+            );
+          } catch (err: any) {
+            console.warn('Wallet adjustment note:', err.message);
+          }
+        }
       } else {
+        // Validate spending against wallet limits and deduct (Section 8 & 9)
+        try {
+          await deductExpenseFromWallet(
+            'pending_exp',
+            parsedAmount,
+            title.trim() || 'Untitled Expense',
+            category
+          );
+        } catch (walletErr: any) {
+          alert(walletErr.message);
+          return;
+        }
+
         const createdId = await addExpense({
           title: title.trim() || 'Untitled Expense',
           amount: parsedAmount,
@@ -156,6 +187,15 @@ export const ExpenseEditor: React.FC<ExpenseEditorProps> = ({
     if (!initialExpense) return;
     if (window.confirm('Delete this expense card?')) {
       await deleteExpense(initialExpense.id);
+      try {
+        await reverseExpenseWalletDebit(
+          initialExpense.id,
+          initialExpense.amount,
+          initialExpense.title
+        );
+      } catch (err: any) {
+        console.warn('Wallet reversal note:', err.message);
+      }
       onClose();
     }
   };
@@ -216,8 +256,11 @@ export const ExpenseEditor: React.FC<ExpenseEditorProps> = ({
 
             <div className="grid grid-cols-2 gap-3 bg-black/5 p-3 rounded-2xl">
               <div>
-                <label className="block text-[11px] font-semibold text-gray-600 mb-1">
-                  Amount ({currencySymbol})
+                <label className="block text-[11px] font-semibold text-gray-600 mb-1 flex items-center justify-between">
+                  <span>Amount ({currencySymbol})</span>
+                  <span className="text-[10px] text-gray-500 font-bold">
+                    Wallet: {formatCurrency(currentWallet?.balance || 0, userProfile?.currency)}
+                  </span>
                 </label>
                 <div className="relative">
                   <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm font-bold text-gray-500">
@@ -258,6 +301,23 @@ export const ExpenseEditor: React.FC<ExpenseEditorProps> = ({
                     <div className="col-span-2 flex items-center gap-1.5 text-[11px] font-semibold text-amber-800 bg-amber-50 px-2.5 py-1.5 rounded-xl border border-amber-200/70">
                       <span>💰</span>
                       <span>₹{roundDiff} spare change will be automatically saved toward your Goals</span>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
+
+              {(() => {
+                const parsedNum = parseFloat(amount) || 0;
+                const curBal = currentWallet?.balance ?? 0;
+                if (parsedNum > 0 && curBal - parsedNum < 0) {
+                  return (
+                    <div className="col-span-2 flex items-center gap-1.5 text-[11px] font-semibold text-rose-800 bg-rose-50 px-2.5 py-1.5 rounded-xl border border-rose-200">
+                      <span>⚠️</span>
+                      <span>
+                        Expense exceeds available wallet balance. Resulting balance: −₹
+                        {Math.abs(curBal - parsedNum).toFixed(2)}
+                      </span>
                     </div>
                   );
                 }

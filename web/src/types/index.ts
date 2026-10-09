@@ -250,3 +250,170 @@ export const POPULAR_GOAL_EMOJIS = [
   '🎓', '🏖️', '📱', '🚗', '🏠', '🎂', '💰', '💍', '💻', '✈️', '🚴', '🎸', '🎁', '🏖️', '🏥', '🚀'
 ];
 
+// ==========================================
+// FAMILY & INDIVIDUAL WALLET SYSTEM TYPES
+// ==========================================
+
+export type WalletType = 'individual' | 'family';
+export type WalletStatus = 'active' | 'frozen';
+
+export interface Wallet {
+  id: string;
+  ownerUserId: string;
+  ownerName: string;
+  familyId?: string;
+  currency: string;
+  balance: number;
+  walletType: WalletType;
+  status: WalletStatus;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export type WalletTransactionType =
+  | 'TOP_UP'
+  | 'ONLINE_TOP_UP'
+  | 'TRANSFER_IN'
+  | 'TRANSFER_OUT'
+  | 'EXPENSE_DEBIT'
+  | 'EXPENSE_REVERSAL'
+  | 'EXPENSE_ADJUSTMENT'
+  | 'REQUEST_APPROVED'
+  | 'REVERSAL'
+  | 'ADJUSTMENT';
+
+export type WalletTransactionDirection = 'IN' | 'OUT';
+export type WalletTransactionStatus = 'COMPLETED' | 'PENDING' | 'FAILED' | 'REVERSED';
+
+export interface WalletTransaction {
+  id: string;
+  walletId: string;
+  familyId?: string;
+  userId: string;
+  userName: string;
+  type: WalletTransactionType;
+  direction: WalletTransactionDirection;
+  amount: number;
+  resultingBalance: number;
+  currency: string;
+  status: WalletTransactionStatus;
+  description: string;
+  notes?: string;
+  fundingSource?: string;
+  relatedExpenseId?: string;
+  relatedRequestId?: string;
+  relatedTransferId?: string;
+  relatedMemberUid?: string;
+  relatedMemberName?: string;
+  idempotencyKey?: string;
+  createdAt: number;
+  createdBy: string;
+}
+
+export type MoneyRequestStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED' | 'EXPIRED';
+
+export interface WalletMoneyRequest {
+  id: string;
+  familyId: string;
+  requesterUserId: string;
+  requesterName: string;
+  requesterPhotoUrl?: string;
+  requesterCurrentBalance: number;
+  amount: number;
+  reason: string;
+  description?: string;
+  category?: string;
+  urgency?: 'Low' | 'Medium' | 'High' | 'Emergency';
+  status: MoneyRequestStatus;
+  rejectionReason?: string;
+  createdAt: number;
+  resolvedAt?: number;
+  resolvedBy?: string;
+}
+
+export interface WalletTransfer {
+  id: string;
+  familyId: string;
+  senderWalletId: string;
+  senderUserId: string;
+  senderName: string;
+  recipientWalletId: string;
+  recipientUserId: string;
+  recipientName: string;
+  amount: number;
+  note?: string;
+  status: 'COMPLETED' | 'FAILED' | 'REVERSED';
+  createdAt: number;
+  completedAt?: number;
+}
+
+export type NegativeBalancePolicy = 'ALLOW_UNLIMITED' | 'ALLOW_WITH_LIMIT' | 'BLOCK';
+
+export interface WalletSpendingLimits {
+  id: string;
+  familyId: string;
+  userId: string;
+  dailyLimit?: number;
+  monthlyLimit?: number;
+  allowNegativeBalance: boolean;
+  negativeBalanceLimit?: number;
+  negativeBalancePolicy: NegativeBalancePolicy;
+  lowBalanceThreshold: number;
+  updatedBy: string;
+  updatedAt: number;
+}
+
+export interface FamilyWalletPolicy {
+  familyId: string;
+  allowMemberSelfFunding: boolean;
+  maxTransferAmount?: number;
+  defaultNegativePolicy: NegativeBalancePolicy;
+  defaultNegativeLimit?: number;
+  updatedAt: number;
+}
+
+export interface WalletRecurringTransfer {
+  id: string;
+  familyId: string;
+  senderUserId: string;
+  recipientUserId: string;
+  recipientName: string;
+  amount: number;
+  frequency: 'daily' | 'weekly' | 'monthly';
+  startDate: string;
+  endDate?: string;
+  note?: string;
+  status: 'active' | 'paused';
+  nextRunAt: number;
+  lastRunAt?: number;
+  createdAt: number;
+}
+
+export type WalletNotificationType =
+  | 'REQUEST_RECEIVED'
+  | 'REQUEST_APPROVED'
+  | 'REQUEST_REJECTED'
+  | 'TRANSFER_RECEIVED'
+  | 'TRANSFER_SENT'
+  | 'EXPENSE_RECORDED'
+  | 'LOW_BALANCE'
+  | 'NEGATIVE_BALANCE'
+  | 'LIMIT_REACHED'
+  | 'WALLET_FROZEN'
+  | 'WALLET_UNFROZEN';
+
+export interface WalletNotification {
+  id: string;
+  userId: string;
+  familyId?: string;
+  title: string;
+  message: string;
+  type: WalletNotificationType;
+  amount?: number;
+  read: boolean;
+  relatedMemberName?: string;
+  relatedEntityId?: string;
+  createdAt: number;
+}
+
+

@@ -17,6 +17,12 @@ import { GoalsDashboard } from './components/goals/GoalsDashboard';
 import { CreateGoalWizard } from './components/goals/CreateGoalWizard';
 import { GoalsFeedWidget } from './components/goals/GoalsFeedWidget';
 import { RoundUpToast } from './components/goals/RoundUpToast';
+import { WalletProvider } from './context/WalletContext';
+import { WalletPill } from './components/wallet/WalletPill';
+import { WalletModal } from './components/wallet/WalletModal';
+import { AddMoneyModal } from './components/wallet/AddMoneyModal';
+import { TransferMoneyModal } from './components/wallet/TransferMoneyModal';
+import { RequestMoneyModal } from './components/wallet/RequestMoneyModal';
 import { Expense } from './types';
 import { Plus } from 'lucide-react';
 import { motion } from 'framer-motion';
@@ -31,6 +37,10 @@ const MainAppContent: React.FC = () => {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isGoalsOpen, setIsGoalsOpen] = useState(false);
   const [isCreateGoalOpen, setIsCreateGoalOpen] = useState(false);
+  const [isWalletOpen, setIsWalletOpen] = useState(false);
+  const [isWalletAddMoneyOpen, setIsWalletAddMoneyOpen] = useState(false);
+  const [isWalletTransferOpen, setIsWalletTransferOpen] = useState(false);
+  const [isWalletRequestOpen, setIsWalletRequestOpen] = useState(false);
 
   if (loading) {
     return (
@@ -83,9 +93,19 @@ const MainAppContent: React.FC = () => {
         onOpenSettings={() => setIsSettingsOpen(true)}
         onOpenProfile={() => setIsProfileOpen(true)}
         onOpenGoals={() => setIsGoalsOpen(true)}
+        onOpenWallet={() => setIsWalletOpen(true)}
       />
 
       <main className="flex-1 max-w-6xl w-full mx-auto px-4 pt-3">
+        {/* Horizontal Wallet Pill Widget */}
+        <WalletPill
+          onOpenWallet={() => setIsWalletOpen(true)}
+          onOpenAddMoney={() => setIsWalletAddMoneyOpen(true)}
+          onOpenTransferMoney={() => setIsWalletTransferOpen(true)}
+          onOpenRequestMoney={() => setIsWalletRequestOpen(true)}
+          onOpenTransactions={() => setIsWalletOpen(true)}
+        />
+
         {/* Compact Goals Progress Widget */}
         <GoalsFeedWidget
           onOpenGoals={() => setIsGoalsOpen(true)}
@@ -170,6 +190,30 @@ const MainAppContent: React.FC = () => {
 
       {/* Subtle Floating Round-Up Savings Toast */}
       <RoundUpToast onOpenGoals={() => setIsGoalsOpen(true)} />
+
+      {/* Primary Wallet Dashboard Modal */}
+      <WalletModal
+        isOpen={isWalletOpen}
+        onClose={() => setIsWalletOpen(false)}
+      />
+
+      {/* Quick Add Money Modal */}
+      <AddMoneyModal
+        isOpen={isWalletAddMoneyOpen}
+        onClose={() => setIsWalletAddMoneyOpen(false)}
+      />
+
+      {/* Quick Transfer Money Modal */}
+      <TransferMoneyModal
+        isOpen={isWalletTransferOpen}
+        onClose={() => setIsWalletTransferOpen(false)}
+      />
+
+      {/* Quick Request Money Modal */}
+      <RequestMoneyModal
+        isOpen={isWalletRequestOpen}
+        onClose={() => setIsWalletRequestOpen(false)}
+      />
     </div>
   );
 };
@@ -177,11 +221,13 @@ const MainAppContent: React.FC = () => {
 export function App() {
   return (
     <AuthProvider>
-      <GoalProvider>
-        <ExpenseProvider>
-          <MainAppContent />
-        </ExpenseProvider>
-      </GoalProvider>
+      <ExpenseProvider>
+        <GoalProvider>
+          <WalletProvider>
+            <MainAppContent />
+          </WalletProvider>
+        </GoalProvider>
+      </ExpenseProvider>
     </AuthProvider>
   );
 }
