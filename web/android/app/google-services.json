@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "1089614326492",
+    "project_id": "femspen-bee68",
+    "storage_bucket": "femspen-bee68.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1089614326492:android:ab22bf17ba186399ae6219",
+        "android_client_info": {
+          "package_name": "com.femspen.adnroid.debug"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB-DcIyCrM5tVMtW0vhGp21Kkf99Xc02LM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1089614326492:android:1d33cfff78adbbbdae6219",
+        "android_client_info": {
+          "package_name": "com.femspen.android"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB-DcIyCrM5tVMtW0vhGp21Kkf99Xc02LM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

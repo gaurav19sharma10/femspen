@@ -15,5 +15,7 @@ web/.env
 
 # Temporary & Logs
 *.log
+*.apk
+web/android/local.properties
 .DS_Store
 Thumbs.db

@@ -1,0 +1,17 @@
+{
+  "appId": "com.femspen.android",
+  "appName": "FemSpen",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  },
+  "plugins": {
+    "StatusBar": {
+      "style": "DARK",
+      "backgroundColor": "#FFFFFF"
+    },
+    "Keyboard": {
+      "resize": "body"
+    }
+  }
+}
