@@ -445,6 +445,52 @@ export const GoalDetailModal: React.FC<GoalDetailModalProps> = ({
                 </div>
               </div>
 
+              {/* Smart Goal Insights (Section 17) */}
+              {(() => {
+                const totalContributed = goal.currentAmount;
+                const isTargetReached = totalContributed >= goal.targetAmount;
+                if (isTargetReached) return null;
+
+                let insightMsg = '';
+                let insightIcon = '💡';
+                let insightClass = 'bg-blue-50/80 border-blue-200/80 text-blue-900';
+
+                if (goal.targetDate) {
+                  const today = new Date();
+                  const target = new Date(goal.targetDate);
+                  const monthsLeft = Math.max(1, (target.getFullYear() - today.getFullYear()) * 12 + (target.getMonth() - today.getMonth()));
+                  const neededPerMonth = Math.ceil(remainingAmount / monthsLeft);
+
+                  if (goal.currentAmount >= (goal.targetAmount / 2) && monthsLeft > 6) {
+                    insightIcon = '🚀';
+                    insightMsg = `Great! You're ahead of your target. Keeping this pace will achieve the goal well before ${target.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}.`;
+                    insightClass = 'bg-emerald-50/80 border-emerald-200/80 text-emerald-900';
+                  } else if (monthsLeft <= 2 && remainingAmount > (neededPerMonth * 1.5)) {
+                    insightIcon = '⚠️';
+                    insightMsg = `You're slightly behind your planned savings. Adding ₹${Math.ceil(neededPerMonth * 0.25).toLocaleString()} more this month will keep you on track.`;
+                    insightClass = 'bg-amber-50/80 border-amber-200/80 text-amber-900';
+                  } else {
+                    insightIcon = '💡';
+                    insightMsg = `You need ₹${neededPerMonth.toLocaleString()}/month. At this rate, you'll reach your goal in approximately ${monthsLeft} month${monthsLeft > 1 ? 's' : ''}.`;
+                  }
+                } else {
+                  insightIcon = '🌱';
+                  insightMsg = `Flexible goal with no strict deadline. Every spare-change round-up and manual deposit moves you closer!`;
+                }
+
+                return (
+                  <div className={`p-3.5 rounded-2xl border flex items-start gap-2.5 text-xs ${insightClass}`}>
+                    <span className="text-base select-none mt-0.5">{insightIcon}</span>
+                    <div className="flex-1">
+                      <span className="font-bold block mb-0.5 uppercase tracking-wider text-[10px]">
+                        Smart Goal Insight
+                      </span>
+                      <p className="font-medium leading-relaxed">{insightMsg}</p>
+                    </div>
+                  </div>
+                );
+              })()}
+
               {/* Add Money Section */}
               <div className="p-5 rounded-2xl bg-gray-50 border border-gray-200/80 space-y-4">
                 <div className="flex items-center justify-between">

@@ -22,6 +22,8 @@ export const AutomaticSavingsModal: React.FC<AutomaticSavingsModalProps> = ({ on
   const [targetGoalId, setTargetGoalId] = useState<string>(
     roundUpSettings.targetGoalId || (activeGoals[0]?.id || '')
   );
+  const [dailySavingEnabled, setDailySavingEnabled] = useState(roundUpSettings.dailySavingEnabled ?? true);
+  const [monthlySavingEnabled, setMonthlySavingEnabled] = useState(roundUpSettings.monthlySavingEnabled ?? true);
 
   // Playground simulation state
   const [testAmount, setTestAmount] = useState<string>('480');
@@ -38,6 +40,8 @@ export const AutomaticSavingsModal: React.FC<AutomaticSavingsModalProps> = ({ on
       roundTo: finalRoundTo,
       destination,
       targetGoalId: destination === 'specific' ? targetGoalId : undefined,
+      dailySavingEnabled,
+      monthlySavingEnabled,
     });
     onClose();
   };
@@ -259,6 +263,57 @@ export const AutomaticSavingsModal: React.FC<AutomaticSavingsModalProps> = ({ on
                 <p className="text-[11px] text-amber-700/80 mt-2">
                   Expense rounded to ₹{simulatedCeil}. Difference of ₹{simulatedSaved} automatically grows your goals!
                 </p>
+              </div>
+
+              {/* Recurring Scheduled Saving Controls (Section 18) */}
+              <div className="space-y-3 pt-2 border-t border-gray-100">
+                <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                  Automated Saving Schedules
+                </h4>
+
+                {/* Daily Saving Toggle */}
+                <div className="flex items-center justify-between p-3.5 bg-gray-50 border border-gray-200/80 rounded-2xl">
+                  <div>
+                    <h5 className="font-bold text-gray-900 text-xs">Daily Saving Rules</h5>
+                    <p className="text-[11px] text-gray-500">Allow daily auto-savings configured in goals</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setDailySavingEnabled(!dailySavingEnabled)}
+                    className={`w-11 h-6 flex items-center rounded-full p-0.5 cursor-pointer transition-colors ${
+                      dailySavingEnabled ? 'bg-[#0057FF]' : 'bg-gray-300'
+                    }`}
+                  >
+                    <motion.div
+                      layout
+                      className="bg-white w-5 h-5 rounded-full shadow-md"
+                      animate={{ x: dailySavingEnabled ? 20 : 0 }}
+                      transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                    />
+                  </button>
+                </div>
+
+                {/* Monthly Saving Toggle */}
+                <div className="flex items-center justify-between p-3.5 bg-gray-50 border border-gray-200/80 rounded-2xl">
+                  <div>
+                    <h5 className="font-bold text-gray-900 text-xs">Monthly Deposit Rules</h5>
+                    <p className="text-[11px] text-gray-500">Allow monthly scheduled contributions</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setMonthlySavingEnabled(!monthlySavingEnabled)}
+                    className={`w-11 h-6 flex items-center rounded-full p-0.5 cursor-pointer transition-colors ${
+                      monthlySavingEnabled ? 'bg-[#0057FF]' : 'bg-gray-300'
+                    }`}
+                  >
+                    <motion.div
+                      layout
+                      className="bg-white w-5 h-5 rounded-full shadow-md"
+                      animate={{ x: monthlySavingEnabled ? 20 : 0 }}
+                      transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                    />
+                  </button>
+                </div>
               </div>
             </>
           )}

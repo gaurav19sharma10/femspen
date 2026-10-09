@@ -200,8 +200,8 @@ export const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ isOpen, onClose 
           <div className="flex items-center gap-2 border-b border-gray-200 pb-2">
             {[
               { id: 'all', label: 'All Goals', count: goals.length },
-              { id: 'individual', label: 'Just Me 🔒', count: individualGoals.length },
-              { id: 'group', label: 'With Family 👨‍👩‍👧‍👦', count: groupGoals.length },
+              { id: 'individual', label: 'My Goals 🔒', count: individualGoals.length },
+              { id: 'group', label: 'Family Goals 👨‍👩‍👧‍👦', count: groupGoals.length },
               { id: 'completed', label: 'Completed 🎉', count: completedGoals.length },
             ].map((tab) => (
               <button

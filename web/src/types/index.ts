@@ -229,6 +229,8 @@ export interface RoundUpSettings {
   destination: 'all' | 'specific';
   targetGoalId?: string;
   allocations?: Record<string, number>;
+  dailySavingEnabled?: boolean;
+  monthlySavingEnabled?: boolean;
 }
 
 export const GOAL_CATEGORIES = [

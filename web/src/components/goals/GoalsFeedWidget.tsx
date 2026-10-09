@@ -49,15 +49,26 @@ export const GoalsFeedWidget: React.FC<GoalsFeedWidgetProps> = ({
     <div className="mb-4 p-4 rounded-3xl bg-white border border-gray-200/80 shadow-2xs space-y-3">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2.5">
-          <span className="p-1.5 rounded-xl bg-blue-50 text-[#0057FF]">
-            <Target size={16} />
+          <span className="p-2 rounded-2xl bg-blue-50 text-[#0057FF]">
+            <Target size={18} />
           </span>
           <div>
             <div className="flex items-center gap-2">
-              <h3 className="text-xs font-black text-gray-900">Active Goals</h3>
-              <span className="text-[10px] font-bold text-gray-400">
-                ({formatCurrency(stats.totalSaved, userProfile?.currency)} saved)
+              <h3 className="text-sm font-black text-gray-900 leading-tight">Goals</h3>
+              <span className="text-xs font-black text-gray-900">
+                {formatCurrency(stats.totalSaved, userProfile?.currency)} saved
               </span>
+            </div>
+            <div className="flex items-center gap-2 text-[11px] text-gray-500 font-medium">
+              <span>{activeGoals.length} active goal{activeGoals.length !== 1 ? 's' : ''}</span>
+              {stats.savedThisMonth > 0 && (
+                <>
+                  <span>•</span>
+                  <span className="text-emerald-600 font-bold">
+                    +{formatCurrency(stats.savedThisMonth, userProfile?.currency)} this month
+                  </span>
+                </>
+              )}
             </div>
           </div>
         </div>
