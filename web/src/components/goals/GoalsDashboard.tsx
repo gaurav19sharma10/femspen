@@ -27,9 +27,14 @@ import { AutomaticSavingsModal } from './AutomaticSavingsModal';
 interface GoalsDashboardProps {
   isOpen: boolean;
   onClose: () => void;
+  onRequestMoney?: (prefillReason?: string, prefillAmount?: number) => void;
 }
 
-export const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ isOpen, onClose }) => {
+export const GoalsDashboard: React.FC<GoalsDashboardProps> = ({
+  isOpen,
+  onClose,
+  onRequestMoney,
+}) => {
   const {
     goals,
     activeGoals,
@@ -419,6 +424,7 @@ export const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ isOpen, onClose 
           goalId={selectedGoalId}
           isOpen={Boolean(selectedGoalId)}
           onClose={() => setSelectedGoalId(null)}
+          onRequestMoney={onRequestMoney}
         />
       )}
     </div>

@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Goal, GoalTransaction, SpendingRequest } from '../../types';
 import { useGoal } from '../../context/GoalContext';
 import { useAuth } from '../../context/AuthContext';
+import { useWallet } from '../../context/WalletContext';
 import {
   X,
   Plus,
@@ -23,6 +24,7 @@ import {
   Check,
   Coins,
   History,
+  Wallet as WalletIcon,
 } from 'lucide-react';
 import { formatCurrency } from '../../utils/currency';
 
@@ -30,12 +32,14 @@ interface GoalDetailModalProps {
   goalId: string;
   isOpen: boolean;
   onClose: () => void;
+  onRequestMoney?: (prefillReason?: string, prefillAmount?: number) => void;
 }
 
 export const GoalDetailModal: React.FC<GoalDetailModalProps> = ({
   goalId,
   isOpen,
   onClose,
+  onRequestMoney,
 }) => {
   const {
     goals,
@@ -50,6 +54,7 @@ export const GoalDetailModal: React.FC<GoalDetailModalProps> = ({
     transactions,
   } = useGoal();
   const { user, userProfile } = useAuth();
+  const { currentWallet, checkGoalContributionAllowed } = useWallet();
 
   const goal = goals.find((g) => g.id === goalId);
 
@@ -112,6 +117,13 @@ export const GoalDetailModal: React.FC<GoalDetailModalProps> = ({
   const handleContribute = async (customAmt?: number) => {
     const amt = customAmt !== undefined ? customAmt : parseFloat(addAmount);
     if (!amt || amt <= 0) return;
+
+    // Check wallet rules
+    const check = checkGoalContributionAllowed(amt);
+    if (!check.allowed) {
+      alert(check.reason || 'Contribution blocked by wallet rules');
+      return;
+    }
 
     setIsContributing(true);
     try {
@@ -511,19 +523,82 @@ export const GoalDetailModal: React.FC<GoalDetailModalProps> = ({
                   </button>
                 </div>
 
+                {/* Current Wallet Balance & Status */}
+                <div className="flex items-center justify-between p-2.5 px-3 bg-white rounded-xl border border-gray-200/80 text-xs">
+                  <div className="flex items-center gap-1.5 text-gray-600 font-medium">
+                    <WalletIcon size={14} className="text-[#0057FF]" />
+                    <span>Your Wallet Balance:</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`font-mono font-bold ${
+                        currentWallet && currentWallet.balance < 0 ? 'text-rose-600' : 'text-gray-900'
+                      }`}
+                    >
+                      {formatCurrency(currentWallet?.balance ?? 0, userProfile?.currency)}
+                    </span>
+                    {currentWallet?.status === 'frozen' && (
+                      <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-700 flex items-center gap-1">
+                        <Lock size={10} /> Frozen
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Wallet Frozen Alert */}
+                {currentWallet?.status === 'frozen' && (
+                  <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2">
+                    <Lock size={15} className="shrink-0 text-rose-600" />
+                    <span>Your wallet is frozen by the family head. Contributions cannot be made until unfrozen.</span>
+                  </div>
+                )}
+
+                {/* Low / Zero Balance Member Helper */}
+                {currentWallet &&
+                  currentWallet.balance <= 0 &&
+                  userProfile?.familyRole === 'member' &&
+                  onRequestMoney &&
+                  currentWallet.status !== 'frozen' && (
+                    <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5">
+                        <AlertTriangle size={15} className="shrink-0 text-amber-600" />
+                        <span>Low wallet balance. Need funds to save?</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onClose();
+                          onRequestMoney(`Contribution for ${goal.title}`, 500);
+                        }}
+                        className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-bold text-[11px] shrink-0 cursor-pointer shadow-2xs"
+                      >
+                        Request Funds
+                      </button>
+                    </div>
+                  )}
+
                 {/* Quick Chips */}
                 <div className="grid grid-cols-4 gap-2">
-                  {[100, 500, 1000, 5000].map((amt) => (
-                    <button
-                      key={amt}
-                      type="button"
-                      disabled={isContributing}
-                      onClick={() => handleContribute(amt)}
-                      className="py-2 px-1 rounded-xl bg-white border border-gray-200 hover:border-[#0057FF] hover:bg-blue-50/50 text-xs font-bold text-gray-800 transition-all cursor-pointer shadow-2xs"
-                    >
-                      +₹{amt.toLocaleString()}
-                    </button>
-                  ))}
+                  {[100, 500, 1000, 5000].map((amt) => {
+                    const check = checkGoalContributionAllowed(amt);
+                    const isFrozen = currentWallet?.status === 'frozen';
+                    return (
+                      <button
+                        key={amt}
+                        type="button"
+                        disabled={isContributing || isFrozen || !check.allowed}
+                        onClick={() => handleContribute(amt)}
+                        title={!check.allowed ? check.reason : undefined}
+                        className={`py-2 px-1 rounded-xl border text-xs font-bold transition-all shadow-2xs ${
+                          isFrozen || !check.allowed
+                            ? 'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed opacity-60'
+                            : 'bg-white border-gray-200 hover:border-[#0057FF] hover:bg-blue-50/50 text-gray-800 cursor-pointer'
+                        }`}
+                      >
+                        +₹{amt.toLocaleString()}
+                      </button>
+                    );
+                  })}
                 </div>
 
                 {/* Custom Amount Input & Submit */}
@@ -534,15 +609,16 @@ export const GoalDetailModal: React.FC<GoalDetailModalProps> = ({
                       type="number"
                       placeholder="Custom amount..."
                       value={addAmount}
+                      disabled={currentWallet?.status === 'frozen'}
                       onChange={(e) => setAddAmount(e.target.value)}
-                      className="w-full pl-8 pr-3 py-2 bg-white border border-gray-200 rounded-xl text-xs font-bold focus:outline-none focus:border-[#0057FF]"
+                      className="w-full pl-8 pr-3 py-2 bg-white border border-gray-200 rounded-xl text-xs font-bold focus:outline-none focus:border-[#0057FF] disabled:bg-gray-100 disabled:text-gray-400"
                     />
                   </div>
 
                   <button
                     type="button"
                     onClick={() => handleContribute()}
-                    disabled={isContributing || !addAmount}
+                    disabled={isContributing || !addAmount || currentWallet?.status === 'frozen'}
                     className="px-5 py-2 rounded-xl bg-[#0057FF] hover:bg-[#0046D1] disabled:bg-gray-300 text-white text-xs font-bold transition-colors cursor-pointer shadow-xs"
                   >
                     {isContributing ? 'Adding...' : 'Add Money'}

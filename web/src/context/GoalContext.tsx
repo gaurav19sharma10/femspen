@@ -9,6 +9,7 @@ import {
   GoalStatus,
 } from '../types';
 import { useAuth } from './AuthContext';
+import { useWallet } from './WalletContext';
 import {
   collection,
   doc,
@@ -72,6 +73,7 @@ const GoalContext = createContext<GoalContextType | undefined>(undefined);
 
 export const GoalProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const { user, userProfile } = useAuth();
+  const { validateAndDeductGoalContribution, creditGoalWithdrawalToWallet } = useWallet();
   const [personalGoals, setPersonalGoals] = useState<Goal[]>([]);
   const [familyGoals, setFamilyGoals] = useState<Goal[]>([]);
   const [transactions, setTransactions] = useState<Record<string, GoalTransaction[]>>({});
@@ -509,6 +511,14 @@ export const GoalProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const target = goals.find((g) => g.id === goalId);
     if (!target) return;
 
+    // 1. Enforce Wallet Rules: Validate and deduct funds from user's active wallet
+    try {
+      await validateAndDeductGoalContribution(goalId, target.title, amount);
+    } catch (walletErr: any) {
+      // Re-throw so callers can display specific wallet policy error messages
+      throw walletErr;
+    }
+
     const newAmount = target.currentAmount + amount;
     const isCompleted = newAmount >= target.targetAmount;
     const newStatus: GoalStatus = isCompleted && target.status === 'active' ? 'completed' : target.status;
@@ -637,6 +647,18 @@ export const GoalProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         spendingRequests: [...existingRequests],
       });
 
+      // Credit released funds back to the requesting user's wallet
+      try {
+        await creditGoalWithdrawalToWallet(
+          goalId,
+          target.title,
+          targetReq.amount,
+          `Approved withdrawal for: ${targetReq.reason}`
+        );
+      } catch (walletErr: any) {
+        console.warn('Could not credit wallet on spending release:', walletErr.message);
+      }
+
       await recordTransaction(target, {
         goalId,
         userId: myUid,
@@ -659,6 +681,13 @@ export const GoalProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const newBalance = Math.max(0, target.currentAmount - amount);
     await updateGoal(goalId, { currentAmount: newBalance });
+
+    // Credit withdrawn funds back to user's wallet
+    try {
+      await creditGoalWithdrawalToWallet(goalId, target.title, amount, reason);
+    } catch (walletErr: any) {
+      console.warn('Could not credit wallet on goal withdrawal:', walletErr.message);
+    }
 
     await recordTransaction(target, {
       goalId,
@@ -737,14 +766,18 @@ export const GoalProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (roundUpSettings.destination === 'specific' && roundUpSettings.targetGoalId) {
       const target = active.find((g) => g.id === roundUpSettings.targetGoalId);
       if (target) {
-        await contributeToGoal(
-          target.id,
-          spareChange,
-          'ROUND_UP',
-          expenseId,
-          `₹${spareChange} spare change from ₹${expenseAmount.toLocaleString()} expense`
-        );
-        creditedTitles.push(target.title);
+        try {
+          await contributeToGoal(
+            target.id,
+            spareChange,
+            'ROUND_UP',
+            expenseId,
+            `₹${spareChange} spare change from ₹${expenseAmount.toLocaleString()} expense`
+          );
+          creditedTitles.push(target.title);
+        } catch (walletErr: any) {
+          console.warn('Spare change round-up skipped due to wallet rules:', walletErr.message);
+        }
       }
     } else {
       // Allocate to all active goals
@@ -758,14 +791,18 @@ export const GoalProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           if (percent > 0) {
             const chunk = Math.round((spareChange * percent) / 100);
             if (chunk > 0) {
-              await contributeToGoal(
-                goal.id,
-                chunk,
-                'ROUND_UP',
-                expenseId,
-                `₹${chunk} round-up from ₹${expenseAmount.toLocaleString()} expense`
-              );
-              creditedTitles.push(goal.title);
+              try {
+                await contributeToGoal(
+                  goal.id,
+                  chunk,
+                  'ROUND_UP',
+                  expenseId,
+                  `₹${chunk} round-up from ₹${expenseAmount.toLocaleString()} expense`
+                );
+                creditedTitles.push(goal.title);
+              } catch (walletErr: any) {
+                console.warn('Spare change round-up skipped for goal due to wallet rules:', walletErr.message);
+              }
             }
           }
         }
@@ -778,14 +815,18 @@ export const GoalProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           const goal = active[i];
           const chunk = share + (i === 0 ? remainder : 0);
           if (chunk > 0) {
-            await contributeToGoal(
-              goal.id,
-              chunk,
-              'ROUND_UP',
-              expenseId,
-              `₹${chunk} spare change from ₹${expenseAmount.toLocaleString()} expense`
-            );
-            creditedTitles.push(goal.title);
+            try {
+              await contributeToGoal(
+                goal.id,
+                chunk,
+                'ROUND_UP',
+                expenseId,
+                `₹${chunk} spare change from ₹${expenseAmount.toLocaleString()} expense`
+              );
+              creditedTitles.push(goal.title);
+            } catch (walletErr: any) {
+              console.warn('Spare change round-up skipped for goal due to wallet rules:', walletErr.message);
+            }
           }
         }
       }

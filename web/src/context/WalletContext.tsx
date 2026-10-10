@@ -97,6 +97,22 @@ interface WalletContextType {
   markNotificationAsRead: (id: string) => Promise<void>;
   markAllNotificationsAsRead: () => Promise<void>;
   acknowledgeRequestState: () => void;
+  checkGoalContributionAllowed: (amount: number) => {
+    allowed: boolean;
+    reason?: string;
+    projectedBalance: number;
+  };
+  validateAndDeductGoalContribution: (
+    goalId: string,
+    goalTitle: string,
+    amount: number
+  ) => Promise<{ success: boolean; newBalance: number }>;
+  creditGoalWithdrawalToWallet: (
+    goalId: string,
+    goalTitle: string,
+    amount: number,
+    reason?: string
+  ) => Promise<{ success: boolean; newBalance: number }>;
 }
 
 const DEFAULT_POLICY: FamilyWalletPolicy = {
@@ -1070,6 +1086,167 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     return { success: true, newBalance, warning };
   };
 
+  // 7b. GOAL INTEGRATION: CHECK IF GOAL CONTRIBUTION ADHERES TO WALLET RULES
+  const checkGoalContributionAllowed = (
+    amount: number
+  ): { allowed: boolean; reason?: string; projectedBalance: number } => {
+    if (!currentWallet) {
+      return { allowed: false, reason: 'No active wallet found', projectedBalance: 0 };
+    }
+
+    if (currentWallet.status === 'frozen') {
+      return {
+        allowed: false,
+        reason: 'Your wallet is frozen. Contributions cannot be made right now.',
+        projectedBalance: currentWallet.balance,
+      };
+    }
+
+    const projectedBalance = Math.round((currentWallet.balance - amount) * 100) / 100;
+
+    if (isFamilyMode && myUid) {
+      const limits = spendingLimits[myUid];
+
+      // Negative Balance Policy Check
+      if (projectedBalance < 0) {
+        const policy = limits?.negativeBalancePolicy || familyPolicy?.defaultNegativePolicy || 'ALLOW_UNLIMITED';
+        const negLimit = limits?.negativeBalanceLimit || familyPolicy?.defaultNegativeLimit || 2000;
+
+        if (policy === 'BLOCK' || limits?.allowNegativeBalance === false) {
+          return {
+            allowed: false,
+            reason: `Insufficient wallet balance (₹${currentWallet.balance.toLocaleString()}). Negative spending or allocation is blocked by family policy.`,
+            projectedBalance,
+          };
+        }
+
+        if (policy === 'ALLOW_WITH_LIMIT' && projectedBalance < -negLimit) {
+          return {
+            allowed: false,
+            reason: `Contribution exceeds your negative wallet limit of −₹${negLimit.toLocaleString()} (projected balance: −₹${Math.abs(projectedBalance).toLocaleString()}).`,
+            projectedBalance,
+          };
+        }
+      }
+
+      // Daily Limit Check
+      if (limits?.dailyLimit) {
+        const startOfDay = new Date();
+        startOfDay.setHours(0, 0, 0, 0);
+        const todaySpent = familyTransactions
+          .filter(
+            (tx) =>
+              tx.userId === myUid &&
+              (tx.type === 'EXPENSE_DEBIT' || tx.type === 'GOAL_CONTRIBUTION') &&
+              tx.createdAt >= startOfDay.getTime()
+          )
+          .reduce((sum, tx) => sum + tx.amount, 0);
+
+        if (todaySpent + amount > limits.dailyLimit) {
+          return {
+            allowed: false,
+            reason: `Daily spending/allocation limit exceeded: Limit is ₹${limits.dailyLimit.toLocaleString()}, already allocated ₹${todaySpent.toLocaleString()} today.`,
+            projectedBalance,
+          };
+        }
+      }
+    }
+
+    return { allowed: true, projectedBalance };
+  };
+
+  // 7c. GOAL INTEGRATION: VALIDATE AND DEDUCT GOAL CONTRIBUTION FROM WALLET
+  const validateAndDeductGoalContribution = async (
+    goalId: string,
+    goalTitle: string,
+    amount: number
+  ): Promise<{ success: boolean; newBalance: number }> => {
+    if (amount <= 0) throw new Error('Contribution amount must be greater than zero');
+    if (!currentWallet) throw new Error('No active wallet found');
+
+    const check = checkGoalContributionAllowed(amount);
+    if (!check.allowed) {
+      throw new Error(check.reason || 'Contribution blocked by wallet rules');
+    }
+
+    const newBalance = await executeLedgerUpdate(currentWallet, {
+      walletId: currentWallet.id,
+      familyId: currentWallet.familyId,
+      userId: currentWallet.ownerUserId,
+      userName: currentWallet.ownerName,
+      type: 'GOAL_CONTRIBUTION',
+      direction: 'OUT',
+      amount,
+      currency: currentWallet.currency,
+      status: 'COMPLETED',
+      description: `Saved to Goal: ${goalTitle}`,
+      notes: `Goal contribution transferred from wallet`,
+      createdBy: myUid || '',
+    });
+
+    // Notify user of deduction
+    await sendNotification(currentWallet.ownerUserId, {
+      title: 'Money Saved to Goal',
+      message: `₹${amount.toLocaleString()} was transferred from your wallet to "${goalTitle}". Remaining balance: ₹${newBalance.toLocaleString()}.`,
+      type: 'EXPENSE_RECORDED',
+      amount,
+      relatedEntityId: goalId,
+    });
+
+    // If new balance is negative, alert Head in Family Mode
+    if (newBalance < 0 && isFamilyMode) {
+      const headUid = family?.headUserId;
+      if (headUid && headUid !== myUid) {
+        await sendNotification(headUid, {
+          title: `⚠️ Negative Wallet Alert: ${currentWallet.ownerName}`,
+          message: `${currentWallet.ownerName} saved ₹${amount.toLocaleString()} to goal "${goalTitle}". Their wallet balance is now −₹${Math.abs(newBalance).toLocaleString()}.`,
+          type: 'NEGATIVE_BALANCE',
+          amount: Math.abs(newBalance),
+          relatedMemberName: currentWallet.ownerName,
+          relatedEntityId: goalId,
+        });
+      }
+    }
+
+    return { success: true, newBalance };
+  };
+
+  // 7d. GOAL INTEGRATION: CREDIT GOAL WITHDRAWAL BACK TO WALLET
+  const creditGoalWithdrawalToWallet = async (
+    goalId: string,
+    goalTitle: string,
+    amount: number,
+    reason?: string
+  ): Promise<{ success: boolean; newBalance: number }> => {
+    if (amount <= 0) throw new Error('Withdrawal amount must be greater than zero');
+    if (!currentWallet) throw new Error('No active wallet found');
+
+    const newBalance = await executeLedgerUpdate(currentWallet, {
+      walletId: currentWallet.id,
+      familyId: currentWallet.familyId,
+      userId: currentWallet.ownerUserId,
+      userName: currentWallet.ownerName,
+      type: 'GOAL_WITHDRAWAL',
+      direction: 'IN',
+      amount,
+      currency: currentWallet.currency,
+      status: 'COMPLETED',
+      description: `Funds Released from Goal: ${goalTitle}`,
+      notes: reason ? `Withdrawal: ${reason}` : 'Goal funds returned to wallet',
+      createdBy: myUid || '',
+    });
+
+    await sendNotification(currentWallet.ownerUserId, {
+      title: 'Goal Funds Returned to Wallet',
+      message: `₹${amount.toLocaleString()} from "${goalTitle}" was added back to your wallet. Current balance: ₹${newBalance.toLocaleString()}.${reason ? ` (Reason: ${reason})` : ''}`,
+      type: 'TRANSFER_RECEIVED',
+      amount,
+      relatedEntityId: goalId,
+    });
+
+    return { success: true, newBalance };
+  };
+
   // 8. EXPENSE INTEGRATION: ADJUSTMENT ON EXPENSE EDIT
   const adjustExpenseWalletDebit = async (
     expenseId: string,
@@ -1341,6 +1518,9 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         markNotificationAsRead,
         markAllNotificationsAsRead,
         acknowledgeRequestState,
+        checkGoalContributionAllowed,
+        validateAndDeductGoalContribution,
+        creditGoalWithdrawalToWallet,
       }}
     >
       {children}

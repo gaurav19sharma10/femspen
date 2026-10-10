@@ -175,6 +175,10 @@ const MainAppContent: React.FC = () => {
         <GoalsDashboard
           isOpen={isGoalsOpen}
           onClose={() => setIsGoalsOpen(false)}
+          onRequestMoney={() => {
+            setIsGoalsOpen(false);
+            setIsWalletRequestOpen(true);
+          }}
         />
       )}
 
@@ -234,11 +238,11 @@ export function App() {
   return (
     <AuthProvider>
       <ExpenseProvider>
-        <GoalProvider>
-          <WalletProvider>
+        <WalletProvider>
+          <GoalProvider>
             <MainAppContent />
-          </WalletProvider>
-        </GoalProvider>
+          </GoalProvider>
+        </WalletProvider>
       </ExpenseProvider>
     </AuthProvider>
   );
