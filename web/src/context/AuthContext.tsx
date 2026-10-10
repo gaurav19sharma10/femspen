@@ -8,6 +8,7 @@ import {
 } from 'firebase/auth';
 import {
   doc,
+  getDoc,
   setDoc,
   updateDoc,
   onSnapshot,
@@ -206,9 +207,86 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const famRef = doc(db, 'families', userProfile.familyId);
       const unsub = onSnapshot(
         famRef,
-        (docSnap) => {
+        async (docSnap) => {
           if (docSnap.exists()) {
-            const famData = docSnap.data() as FamilyGroup;
+            let famData = docSnap.data() as FamilyGroup;
+            let needDbUpdate = false;
+            const updatePayload: Record<string, any> = {};
+
+            // Fetch Head's actual displayName from Firestore users collection
+            let headRealName: string | undefined;
+            if (famData.headUserId) {
+              if (famData.headUserId === user?.uid && userProfile?.displayName && !userProfile.displayName.includes('@')) {
+                headRealName = userProfile.displayName;
+              } else {
+                try {
+                  const headUserSnap = await getDoc(doc(db, 'users', famData.headUserId));
+                  if (headUserSnap.exists()) {
+                    const hData = headUserSnap.data();
+                    if (hData?.displayName && typeof hData.displayName === 'string' && hData.displayName.trim().length > 0) {
+                      headRealName = hData.displayName.trim();
+                    }
+                  }
+                } catch {
+                  // ignore
+                }
+              }
+            }
+
+            // If headRealName is resolved and differs from stored headName or stored headName looks like email
+            if (headRealName && (famData.headName !== headRealName || famData.headName.includes('@'))) {
+              famData = { ...famData, headName: headRealName };
+              updatePayload.headName = headRealName;
+              needDbUpdate = true;
+            }
+
+            // Also check members list to ensure all members display their saved database name
+            if (famData.members && famData.members.length > 0) {
+              let membersChanged = false;
+              const updatedMembers = await Promise.all(
+                famData.members.map(async (m) => {
+                  let resolvedName = m.displayName;
+                  if (m.uid === famData.headUserId && headRealName) {
+                    resolvedName = headRealName;
+                  } else if (m.uid === user?.uid && userProfile?.displayName && !userProfile.displayName.includes('@')) {
+                    resolvedName = userProfile.displayName;
+                  } else if (!resolvedName || resolvedName.includes('@')) {
+                    try {
+                      const memberUserSnap = await getDoc(doc(db, 'users', m.uid));
+                      if (memberUserSnap.exists()) {
+                        const mData = memberUserSnap.data();
+                        if (mData?.displayName && typeof mData.displayName === 'string' && mData.displayName.trim().length > 0) {
+                          resolvedName = mData.displayName.trim();
+                        }
+                      }
+                    } catch {
+                      // ignore
+                    }
+                  }
+
+                  if (resolvedName !== m.displayName) {
+                    membersChanged = true;
+                    return { ...m, displayName: resolvedName };
+                  }
+                  return m;
+                })
+              );
+
+              if (membersChanged) {
+                famData = { ...famData, members: updatedMembers };
+                updatePayload.members = updatedMembers;
+                needDbUpdate = true;
+              }
+            }
+
+            if (needDbUpdate && db) {
+              try {
+                await updateDoc(famRef, cleanForFirestore(updatePayload));
+              } catch {
+                // ignore
+              }
+            }
+
             setFamily(famData);
             localStorage.setItem(famStorageKey, JSON.stringify(famData));
           } else {
@@ -221,7 +299,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       );
       return () => unsub();
     }
-  }, [userProfile?.familyId]);
+  }, [userProfile?.familyId, userProfile?.displayName, user?.uid]);
 
   const isPinConfigured = Boolean(
     userProfile?.pinHash && userProfile?.pinSalt && userProfile?.securityAnswerHash
@@ -308,10 +386,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     }
 
+    let initialDisplayName = pendingData.displayName || userProfile?.displayName;
+    if ((!initialDisplayName || initialDisplayName.includes('@')) && db) {
+      try {
+        const uSnap = await getDoc(doc(db, 'users', user.uid));
+        if (uSnap.exists()) {
+          const uData = uSnap.data();
+          if (uData?.displayName && typeof uData.displayName === 'string' && uData.displayName.trim().length > 0) {
+            initialDisplayName = uData.displayName.trim();
+          }
+        }
+      } catch {
+        // ignore
+      }
+    }
+    if (!initialDisplayName || initialDisplayName.includes('@')) {
+      initialDisplayName = (user as any).displayName || (user.email ? user.email.split('@')[0] : 'User');
+    }
+
     const newProfile: UserProfile = {
       uid: user.uid,
       email: user.email,
-      displayName: pendingData.displayName || user.email.split('@')[0],
+      displayName: initialDisplayName,
       dob: pendingData.dob || undefined,
       gender: pendingData.gender || undefined,
       phoneNumber: pendingData.phoneNumber || undefined,
@@ -417,6 +513,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // If profile name or avatar updated and user belongs to a family, sync inside family document
     if (family && updated.familyId) {
+      const isHead = family.headUserId === uid;
       const updatedMembers: FamilyMember[] = family.members.map((m) =>
         m.uid === uid
           ? {
@@ -428,12 +525,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }
           : m
       );
-      const updatedFamily = { ...family, members: updatedMembers, updatedAt: Date.now() };
+      const newHeadName = isHead ? (updated.displayName || family.headName) : family.headName;
+      const updatedFamily = {
+        ...family,
+        headName: newHeadName,
+        members: updatedMembers,
+        updatedAt: Date.now(),
+      };
       setFamily(updatedFamily);
       localStorage.setItem(`${LOCAL_STORAGE_FAMILY_KEY}_${family.id}`, JSON.stringify(updatedFamily));
       if (db) {
         try {
           await updateDoc(doc(db, 'families', family.id), cleanForFirestore({
+            headName: newHeadName,
             members: updatedMembers,
             updatedAt: Date.now(),
           }));
@@ -466,9 +570,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const randomDigits = Math.floor(1000 + Math.random() * 9000);
     const inviteCode = `FS${randomDigits}`;
 
+    // Resolve creator's genuine saved database display name
+    let creatorName = userProfile?.displayName;
+    if ((!creatorName || creatorName.includes('@')) && db) {
+      try {
+        const uSnap = await getDoc(doc(db, 'users', user.uid));
+        if (uSnap.exists()) {
+          const uData = uSnap.data();
+          if (uData?.displayName && typeof uData.displayName === 'string' && uData.displayName.trim().length > 0) {
+            creatorName = uData.displayName.trim();
+          }
+        }
+      } catch {
+        // ignore
+      }
+    }
+    const safeCreatorName: string = (creatorName && !creatorName.includes('@')) 
+      ? creatorName 
+      : ((user as any)?.displayName || 'Family Head');
+
     const headMember: FamilyMember = {
       uid: user.uid,
-      displayName: userProfile?.displayName || user.email.split('@')[0] || 'Family Head',
+      displayName: safeCreatorName,
       role: 'head',
       photoUrl: userProfile?.photoUrl || undefined,
       phoneNumber: userProfile?.phoneNumber || undefined,
@@ -481,7 +604,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       name: familyName.trim() || 'My Family',
       inviteCode,
       headUserId: user.uid,
-      headName: headMember.displayName,
+      headName: safeCreatorName,
       members: [headMember],
       createdAt: Date.now(),
       updatedAt: Date.now(),
@@ -554,9 +677,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       };
     }
 
+    // Resolve joining user's real saved database display name
+    let joinerName = userProfile?.displayName;
+    if ((!joinerName || joinerName.includes('@')) && db) {
+      try {
+        const uSnap = await getDoc(doc(db, 'users', user.uid));
+        if (uSnap.exists()) {
+          const uData = uSnap.data();
+          if (uData?.displayName && typeof uData.displayName === 'string' && uData.displayName.trim().length > 0) {
+            joinerName = uData.displayName.trim();
+          }
+        }
+      } catch {
+        // ignore
+      }
+    }
+    const safeJoinerName: string = (joinerName && !joinerName.includes('@'))
+      ? joinerName
+      : ((user as any)?.displayName || 'Family Member');
+
     const currentMember: FamilyMember = {
       uid: user.uid,
-      displayName: userProfile?.displayName || user.email.split('@')[0] || 'Family Member',
+      displayName: safeJoinerName,
       role: 'member',
       photoUrl: userProfile?.photoUrl || undefined,
       phoneNumber: userProfile?.phoneNumber || undefined,

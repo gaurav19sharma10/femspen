@@ -1,6 +1,6 @@
 package com.expensetracker.ui.feed
 
-import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -19,6 +19,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.expensetracker.data.model.Expense
+import com.expensetracker.ui.theme.LocalIsDarkTheme
 import com.expensetracker.ui.theme.PrimaryBlue
 
 @Composable
@@ -26,28 +27,53 @@ fun KeepExpenseCard(
     expense: Expense,
     onCardClick: (Expense) -> Unit,
     onTogglePin: (Expense) -> Unit,
+    currencySymbol: String = "₹",
     modifier: Modifier = Modifier
 ) {
-    // Parse hex color or fallback to default
-    val cardBg = try {
+    val isDark = LocalIsDarkTheme.current
+
+    val rawColor = try {
         Color(android.graphics.Color.parseColor(expense.color))
     } catch (e: Exception) {
         Color(0xFFF8F7F4)
+    }
+
+    val isDefaultChalk = expense.color.equals("#F8F7F4", ignoreCase = true) || expense.color.isBlank()
+
+    val cardBg = if (isDark) {
+        if (isDefaultChalk) {
+            MaterialTheme.colorScheme.surface
+        } else {
+            rawColor.copy(alpha = 0.15f)
+        }
+    } else {
+        rawColor
+    }
+
+    val cardBorderColor = if (isDark) {
+        if (isDefaultChalk) {
+            MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+        } else {
+            rawColor.copy(alpha = 0.4f)
+        }
+    } else {
+        Color.Black.copy(alpha = 0.04f)
     }
 
     Card(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(20.dp))
+            .border(1.dp, cardBorderColor, RoundedCornerShape(20.dp))
             .clickable { onCardClick(expense) },
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = cardBg),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = if (isDark) 0.dp else 1.dp)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(14.dp)
+                .padding(16.dp)
         ) {
             // Category tag & Pin icon
             Row(
@@ -57,14 +83,14 @@ fun KeepExpenseCard(
             ) {
                 Surface(
                     shape = RoundedCornerShape(8.dp),
-                    color = Color.Black.copy(alpha = 0.05f)
+                    color = if (isDark) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.06f)
                 ) {
                     Text(
                         text = expense.category,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = Color(0xFF1E293B),
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                     )
                 }
 
@@ -75,20 +101,20 @@ fun KeepExpenseCard(
                     Icon(
                         Icons.Default.PushPin,
                         contentDescription = "Pin",
-                        tint = if (expense.isPinned) PrimaryBlue else Color.Gray.copy(alpha = 0.4f),
+                        tint = if (expense.isPinned) PrimaryBlue else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
                         modifier = Modifier.size(16.dp)
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
             // Title
             Text(
                 text = expense.title,
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
-                color = Color(0xFF0F172A),
+                color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )
@@ -97,10 +123,10 @@ fun KeepExpenseCard(
 
             // Hero Amount
             Text(
-                text = "$%.2f".format(expense.amount),
+                text = "%s%.2f".format(currencySymbol, expense.amount),
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color(0xFF0F172A)
+                color = MaterialTheme.colorScheme.onBackground
             )
 
             if (expense.notes.isNotBlank()) {
@@ -108,7 +134,7 @@ fun KeepExpenseCard(
                 Text(
                     text = expense.notes,
                     style = MaterialTheme.typography.bodySmall,
-                    color = Color(0xFF475569),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 3,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -122,17 +148,17 @@ fun KeepExpenseCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    if (expense.familyMember != null) {
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    if (!expense.familyMember.isNullOrBlank()) {
                         Surface(
                             shape = RoundedCornerShape(6.dp),
-                            color = Color(0xFF10B981).copy(alpha = 0.12f)
+                            color = Color(0xFF10B981).copy(alpha = 0.15f)
                         ) {
                             Text(
                                 text = expense.familyMember,
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = Color(0xFF065F46),
+                                color = Color(0xFF10B981),
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                             )
                         }
@@ -141,7 +167,7 @@ fun KeepExpenseCard(
                     if (expense.isRecurring) {
                         Surface(
                             shape = RoundedCornerShape(6.dp),
-                            color = PrimaryBlue.copy(alpha = 0.12f)
+                            color = PrimaryBlue.copy(alpha = 0.15f)
                         ) {
                             Row(
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
@@ -169,14 +195,14 @@ fun KeepExpenseCard(
                     Icon(
                         Icons.Default.CalendarToday,
                         contentDescription = null,
-                        tint = Color(0xFF94A3B8),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                         modifier = Modifier.size(11.dp)
                     )
                     Spacer(modifier = Modifier.width(3.dp))
                     Text(
                         text = expense.date,
                         fontSize = 10.sp,
-                        color = Color(0xFF94A3B8)
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                     )
                 }
             }
