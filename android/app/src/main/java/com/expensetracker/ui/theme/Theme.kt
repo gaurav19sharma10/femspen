@@ -12,6 +12,65 @@ import androidx.compose.ui.graphics.Color
 
 val LocalIsDarkTheme = compositionLocalOf { false }
 
+private fun interpolateColor(c1: Color, c2: Color, fraction: Float): Color {
+    val f = fraction.coerceIn(0f, 1f)
+    return Color(
+        red = c1.red + (c2.red - c1.red) * f,
+        green = c1.green + (c2.green - c1.green) * f,
+        blue = c1.blue + (c2.blue - c1.blue) * f,
+        alpha = c1.alpha + (c2.alpha - c1.alpha) * f
+    )
+}
+
+fun calculateDarkColorScheme(sliderValue: Float): ColorScheme {
+    val normalized = (sliderValue / 100f).coerceIn(0f, 1f)
+
+    // Keyframes:
+    // 0.0 -> AMOLED Pitch Black (#000000)
+    // 0.5 -> Midnight Charcoal (#121212)
+    // 1.0 -> Deep Slate Navy (#0B1120)
+
+    val background = if (normalized <= 0.5f) {
+        interpolateColor(Color(0xFF000000), Color(0xFF121212), normalized * 2f)
+    } else {
+        interpolateColor(Color(0xFF121212), Color(0xFF0B1120), (normalized - 0.5f) * 2f)
+    }
+
+    val surface = if (normalized <= 0.5f) {
+        interpolateColor(Color(0xFF090909), Color(0xFF1E1E1E), normalized * 2f)
+    } else {
+        interpolateColor(Color(0xFF1E1E1E), Color(0xFF1E293B), (normalized - 0.5f) * 2f)
+    }
+
+    val surfaceVariant = if (normalized <= 0.5f) {
+        interpolateColor(Color(0xFF141414), Color(0xFF282828), normalized * 2f)
+    } else {
+        interpolateColor(Color(0xFF282828), Color(0xFF334155), (normalized - 0.5f) * 2f)
+    }
+
+    val outline = if (normalized <= 0.5f) {
+        interpolateColor(Color(0xFF222222), Color(0xFF333333), normalized * 2f)
+    } else {
+        interpolateColor(Color(0xFF333333), Color(0xFF475569), (normalized - 0.5f) * 2f)
+    }
+
+    val primary = if (normalized <= 0.5f) Color(0xFF3B82F6) else Color(0xFF38BDF8)
+
+    return darkColorScheme(
+        primary = primary,
+        onPrimary = Color.White,
+        primaryContainer = Color(0xFF1D4ED8),
+        onPrimaryContainer = Color.White,
+        background = background,
+        onBackground = Color(0xFFF8FAFC),
+        surface = surface,
+        onSurface = Color(0xFFF8FAFC),
+        surfaceVariant = surfaceVariant,
+        onSurfaceVariant = Color(0xFF94A3B8),
+        outline = outline
+    )
+}
+
 private val LightColorScheme = lightColorScheme(
     primary = PrimaryBlue,
     onPrimary = Color.White,
@@ -26,52 +85,10 @@ private val LightColorScheme = lightColorScheme(
     outline = Color(0xFFE2E8F0)
 )
 
-private val PitchBlackColorScheme = darkColorScheme(
-    primary = Color(0xFF3B82F6),
-    onPrimary = Color.White,
-    primaryContainer = Color(0xFF1D4ED8),
-    onPrimaryContainer = Color.White,
-    background = BackgroundPitchBlack,
-    onBackground = Color(0xFFF8FAFC),
-    surface = SurfacePitchBlack,
-    onSurface = Color(0xFFF8FAFC),
-    surfaceVariant = SurfaceVariantPitchBlack,
-    onSurfaceVariant = Color(0xFF94A3B8),
-    outline = Color(0xFF262626)
-)
-
-private val MidnightCharcoalColorScheme = darkColorScheme(
-    primary = Color(0xFF3B82F6),
-    onPrimary = Color.White,
-    primaryContainer = Color(0xFF1E3A8A),
-    onPrimaryContainer = Color.White,
-    background = BackgroundMidnight,
-    onBackground = Color(0xFFF8FAFC),
-    surface = SurfaceMidnight,
-    onSurface = Color(0xFFF8FAFC),
-    surfaceVariant = SurfaceVariantMidnight,
-    onSurfaceVariant = Color(0xFF94A3B8),
-    outline = Color(0xFF333333)
-)
-
-private val DeepSlateColorScheme = darkColorScheme(
-    primary = Color(0xFF38BDF8),
-    onPrimary = Color(0xFF0F172A),
-    primaryContainer = Color(0xFF0369A1),
-    onPrimaryContainer = Color.White,
-    background = BackgroundDeepSlate,
-    onBackground = Color(0xFFF8FAFC),
-    surface = SurfaceDeepSlate,
-    onSurface = Color(0xFFF8FAFC),
-    surfaceVariant = SurfaceVariantDeepSlate,
-    onSurfaceVariant = Color(0xFF94A3B8),
-    outline = Color(0xFF334155)
-)
-
 @Composable
 fun ExpenseTrackerTheme(
     themeMode: ThemeMode = ThemeMode.SYSTEM,
-    darkIntensity: DarkModeIntensity = DarkModeIntensity.DEEP_SLATE,
+    darkIntensitySlider: Float = 60f,
     content: @Composable () -> Unit
 ) {
     val isSystemDark = isSystemInDarkTheme()
@@ -81,12 +98,8 @@ fun ExpenseTrackerTheme(
         ThemeMode.DARK -> true
     }
 
-    val colorScheme: ColorScheme = if (isDark) {
-        when (darkIntensity) {
-            DarkModeIntensity.PITCH_BLACK -> PitchBlackColorScheme
-            DarkModeIntensity.MIDNIGHT_CHARCOAL -> MidnightCharcoalColorScheme
-            DarkModeIntensity.DEEP_SLATE -> DeepSlateColorScheme
-        }
+    val colorScheme = if (isDark) {
+        calculateDarkColorScheme(darkIntensitySlider)
     } else {
         LightColorScheme
     }

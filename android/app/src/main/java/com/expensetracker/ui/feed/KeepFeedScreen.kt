@@ -41,7 +41,9 @@ fun KeepFeedScreen(
     onEditExpense: (Expense) -> Unit,
     onTogglePin: (Expense) -> Unit,
     onLockSession: () -> Unit,
-    onOpenThemeSettings: () -> Unit
+    onOpenThemeSettings: () -> Unit,
+    onProfileClick: () -> Unit = {},
+    onBalanceClick: () -> Unit = {}
 ) {
     var searchQuery by remember { mutableStateOf("") }
     val isDark = LocalIsDarkTheme.current
@@ -70,7 +72,9 @@ fun KeepFeedScreen(
                 currentMode = currentMode,
                 onModeToggle = onModeChange,
                 onOpenThemeSettings = onOpenThemeSettings,
-                onLockSession = onLockSession
+                onLockSession = onLockSession,
+                onProfileClick = onProfileClick,
+                onBalanceClick = onBalanceClick
             )
         }
 

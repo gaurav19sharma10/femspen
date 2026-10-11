@@ -32,6 +32,7 @@ fun TopBalanceHeader(
     onOpenThemeSettings: () -> Unit,
     onLockSession: () -> Unit,
     onProfileClick: () -> Unit = {},
+    onBalanceClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val isDark = LocalIsDarkTheme.current
@@ -49,10 +50,10 @@ fun TopBalanceHeader(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // Profile Icon
+            // Profile Icon (opens Profile modal)
             Box(
                 modifier = Modifier
-                    .size(40.dp)
+                    .size(42.dp)
                     .clip(CircleShape)
                     .background(
                         Brush.linearGradient(
@@ -66,11 +67,11 @@ fun TopBalanceHeader(
                     text = initial,
                     color = Color.White,
                     fontWeight = FontWeight.Bold,
-                    fontSize = 16.sp
+                    fontSize = 17.sp
                 )
             }
 
-            // Simple Small Balance Bar next to profile icon
+            // Simple Small Balance Bar next to profile icon (opens Wallet tab)
             Surface(
                 shape = RoundedCornerShape(20.dp),
                 color = MaterialTheme.colorScheme.surface,
@@ -82,6 +83,8 @@ fun TopBalanceHeader(
                         color = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f),
                         shape = RoundedCornerShape(20.dp)
                     )
+                    .clip(RoundedCornerShape(20.dp))
+                    .clickable { onBalanceClick() }
             ) {
                 Row(
                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
@@ -92,7 +95,7 @@ fun TopBalanceHeader(
                         imageVector = Icons.Default.AccountBalanceWallet,
                         contentDescription = "Wallet Balance",
                         tint = PrimaryBlue,
-                        modifier = Modifier.size(14.dp)
+                        modifier = Modifier.size(15.dp)
                     )
                     Text(
                         text = "%s%.2f".format(currencySymbol, walletBalance),
@@ -109,7 +112,7 @@ fun TopBalanceHeader(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            // Compact Mode Toggle Pill
+            // Compact Mode Toggle Pill (Default is Family)
             Surface(
                 shape = RoundedCornerShape(16.dp),
                 color = if (currentMode == ExpenseMode.FAMILY) {
@@ -134,7 +137,7 @@ fun TopBalanceHeader(
                         imageVector = if (currentMode == ExpenseMode.FAMILY) Icons.Default.Groups else Icons.Default.Person,
                         contentDescription = null,
                         tint = if (currentMode == ExpenseMode.FAMILY) Color(0xFF10B981) else PrimaryBlue,
-                        modifier = Modifier.size(13.dp)
+                        modifier = Modifier.size(14.dp)
                     )
                     Text(
                         text = if (currentMode == ExpenseMode.FAMILY) "Family" else "Solo",

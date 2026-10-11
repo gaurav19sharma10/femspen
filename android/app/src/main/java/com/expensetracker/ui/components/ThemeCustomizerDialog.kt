@@ -10,12 +10,12 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.SettingsBrightness
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -24,16 +24,16 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
-import com.expensetracker.ui.theme.DarkModeIntensity
 import com.expensetracker.ui.theme.PrimaryBlue
 import com.expensetracker.ui.theme.ThemeMode
+import com.expensetracker.ui.theme.calculateDarkColorScheme
 
 @Composable
 fun ThemeCustomizerDialog(
     currentThemeMode: ThemeMode,
-    currentDarkIntensity: DarkModeIntensity,
+    currentDarkSlider: Float,
     onThemeModeChange: (ThemeMode) -> Unit,
-    onDarkIntensityChange: (DarkModeIntensity) -> Unit,
+    onDarkSliderChange: (Float) -> Unit,
     onDismiss: () -> Unit
 ) {
     Dialog(onDismissRequest = onDismiss) {
@@ -48,26 +48,39 @@ fun ThemeCustomizerDialog(
                     .fillMaxWidth()
                     .padding(24.dp)
             ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Tune,
+                        contentDescription = null,
+                        tint = PrimaryBlue,
+                        modifier = Modifier.size(22.dp)
+                    )
+                    Text(
+                        text = "Display & Appearance",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+
                 Text(
-                    text = "Display & Appearance",
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    text = "Configure your preferred theme and dark mode depth",
+                    text = "Personalize light/dark themes and contrast depth",
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
                 Spacer(modifier = Modifier.height(18.dp))
 
-                // Theme Mode Selector
+                // Theme Mode Selector Tabs
                 Text(
                     text = "THEME MODE",
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    letterSpacing = 1.sp
                 )
                 Spacer(modifier = Modifier.height(8.dp))
 
@@ -98,45 +111,112 @@ fun ThemeCustomizerDialog(
                     )
                 }
 
-                // Dark Mode Intensity Section
+                // Dark Mode Intensity Slider Section
                 AnimatedVisibility(
                     visible = currentThemeMode != ThemeMode.LIGHT,
                     enter = fadeIn(),
                     exit = fadeOut()
                 ) {
                     Column(modifier = Modifier.padding(top = 20.dp)) {
+                        val currentScheme = remember(currentDarkSlider) { calculateDarkColorScheme(currentDarkSlider) }
+
+                        val depthLabel = remember(currentDarkSlider) {
+                            when {
+                                currentDarkSlider <= 20f -> "AMOLED True Black (0%–20%)"
+                                currentDarkSlider <= 65f -> "Midnight Charcoal (21%–65%)"
+                                else -> "Deep Slate Navy (66%–100%)"
+                            }
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "DARK MODE INTENSITY",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                letterSpacing = 1.sp
+                            )
+                            Text(
+                                text = "%.0f%%".format(currentDarkSlider),
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = PrimaryBlue
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "DARK MODE INTENSITY",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            text = depthLabel,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
                         )
-                        Spacer(modifier = Modifier.height(8.dp))
 
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            IntensityRow(
-                                title = DarkModeIntensity.PITCH_BLACK.title,
-                                description = DarkModeIntensity.PITCH_BLACK.subtitle,
-                                previewColor = Color(0xFF000000),
-                                isSelected = currentDarkIntensity == DarkModeIntensity.PITCH_BLACK,
-                                onClick = { onDarkIntensityChange(DarkModeIntensity.PITCH_BLACK) }
-                            )
+                        Spacer(modifier = Modifier.height(10.dp))
 
-                            IntensityRow(
-                                title = DarkModeIntensity.MIDNIGHT_CHARCOAL.title,
-                                description = DarkModeIntensity.MIDNIGHT_CHARCOAL.subtitle,
-                                previewColor = Color(0xFF121212),
-                                isSelected = currentDarkIntensity == DarkModeIntensity.MIDNIGHT_CHARCOAL,
-                                onClick = { onDarkIntensityChange(DarkModeIntensity.MIDNIGHT_CHARCOAL) }
+                        // Interactive Smooth Intensity Slider
+                        Slider(
+                            value = currentDarkSlider,
+                            onValueChange = onDarkSliderChange,
+                            valueRange = 0f..100f,
+                            colors = SliderDefaults.colors(
+                                thumbColor = PrimaryBlue,
+                                activeTrackColor = PrimaryBlue,
+                                inactiveTrackColor = MaterialTheme.colorScheme.surfaceVariant
                             )
+                        )
 
-                            IntensityRow(
-                                title = DarkModeIntensity.DEEP_SLATE.title,
-                                description = DarkModeIntensity.DEEP_SLATE.subtitle,
-                                previewColor = Color(0xFF0F172A),
-                                isSelected = currentDarkIntensity == DarkModeIntensity.DEEP_SLATE,
-                                onClick = { onDarkIntensityChange(DarkModeIntensity.DEEP_SLATE) }
-                            )
+                        // Live Color Preview Pill
+                        Surface(
+                            shape = RoundedCornerShape(14.dp),
+                            color = currentScheme.background,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .border(1.dp, currentScheme.outline, RoundedCornerShape(14.dp))
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(24.dp)
+                                            .clip(CircleShape)
+                                            .background(currentScheme.surface)
+                                            .border(1.dp, currentScheme.outline, CircleShape)
+                                    )
+                                    Text(
+                                        text = "Live Theme Preview",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = currentScheme.onBackground
+                                    )
+                                }
+
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = currentScheme.surfaceVariant
+                                ) {
+                                    Text(
+                                        text = if (currentDarkSlider < 25f) "AMOLED" else if (currentDarkSlider < 70f) "Charcoal" else "Slate",
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = currentScheme.primary,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -147,9 +227,9 @@ fun ThemeCustomizerDialog(
                     onClick = onDismiss,
                     shape = RoundedCornerShape(14.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth().height(48.dp)
                 ) {
-                    Text("Apply & Close", fontWeight = FontWeight.Bold)
+                    Text("Save & Apply", fontWeight = FontWeight.Bold, fontSize = 14.sp)
                 }
             }
         }
@@ -188,75 +268,6 @@ private fun ThemeModeTab(
                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                 color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
             )
-        }
-    }
-}
-
-@Composable
-private fun IntensityRow(
-    title: String,
-    description: String,
-    previewColor: Color,
-    isSelected: Boolean,
-    onClick: () -> Unit
-) {
-    Surface(
-        shape = RoundedCornerShape(14.dp),
-        color = if (isSelected) PrimaryBlue.copy(alpha = 0.1f) else MaterialTheme.colorScheme.surfaceVariant,
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .border(
-                width = if (isSelected) 1.5.dp else 0.5.dp,
-                color = if (isSelected) PrimaryBlue else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
-                shape = RoundedCornerShape(14.dp)
-            )
-            .clickable { onClick() }
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                modifier = Modifier.weight(1f)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(24.dp)
-                        .clip(CircleShape)
-                        .background(previewColor)
-                        .border(1.dp, Color.White.copy(alpha = 0.3f), CircleShape)
-                )
-
-                Column {
-                    Text(
-                        text = title,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Text(
-                        text = description,
-                        fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        lineHeight = 13.sp
-                    )
-                }
-            }
-
-            if (isSelected) {
-                Icon(
-                    imageVector = Icons.Default.Check,
-                    contentDescription = null,
-                    tint = PrimaryBlue,
-                    modifier = Modifier.size(18.dp)
-                )
-            }
         }
     }
 }

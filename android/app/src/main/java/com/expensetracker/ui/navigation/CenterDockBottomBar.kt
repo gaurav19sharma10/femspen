@@ -3,6 +3,7 @@ package com.expensetracker.ui.navigation
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -29,9 +30,9 @@ import com.expensetracker.ui.theme.PrimaryBlue
 
 enum class BottomNavTab {
     FEED,
-    ANALYTICS,
-    THEME,
-    LOCK
+    WALLET,
+    GOALS,
+    SETTINGS
 }
 
 @Composable
@@ -47,21 +48,24 @@ fun CenterDockBottomBar(
 
     val fabScale by animateFloatAsState(
         targetValue = if (isPressed) 0.88f else 1f,
-        animationSpec = spring(dampingRatio = 0.6f, stiffness = 400f),
+        animationSpec = spring(dampingRatio = 0.5f, stiffness = 450f),
         label = "fabScaleAnim"
     )
 
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(84.dp),
+            .height(88.dp)
+            .padding(horizontal = 12.dp, vertical = 6.dp),
         contentAlignment = Alignment.BottomCenter
     ) {
-        // Base Navigation Bar surface
+        // Modern Floating Pill Navigation Bar
         Surface(
-            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+            shape = RoundedCornerShape(28.dp),
             color = MaterialTheme.colorScheme.surface,
-            shadowElevation = 10.dp,
+            tonalElevation = 3.dp,
+            shadowElevation = if (isDark) 0.dp else 8.dp,
+            border = if (isDark) CardDefaults.outlinedCardBorder() else null,
             modifier = Modifier
                 .fillMaxWidth()
                 .height(64.dp)
@@ -69,67 +73,74 @@ fun CenterDockBottomBar(
             Row(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(horizontal = 16.dp),
+                    .padding(horizontal = 14.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Left 2 items
+                // Left 2 items (Feed & Wallet)
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(20.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
                 ) {
                     NavItem(
                         title = "Feed",
-                        icon = Icons.Default.ReceiptLong,
+                        icon = Icons.Default.ViewAgenda,
                         isSelected = currentTab == BottomNavTab.FEED,
-                        onClick = { onTabSelected(BottomNavTab.FEED) }
+                        onClick = { onTabSelected(BottomNavTab.FEED) },
+                        modifier = Modifier.weight(1f)
                     )
                     NavItem(
-                        title = "Analytics",
-                        icon = Icons.Default.PieChart,
-                        isSelected = currentTab == BottomNavTab.ANALYTICS,
-                        onClick = { onTabSelected(BottomNavTab.ANALYTICS) }
+                        title = "Wallet",
+                        icon = Icons.Default.AccountBalanceWallet,
+                        isSelected = currentTab == BottomNavTab.WALLET,
+                        onClick = { onTabSelected(BottomNavTab.WALLET) },
+                        modifier = Modifier.weight(1f)
                     )
                 }
 
-                // Space for Center FAB dock
-                Spacer(modifier = Modifier.width(56.dp))
+                // Center space for docked button
+                Spacer(modifier = Modifier.width(64.dp))
 
-                // Right 2 items
+                // Right 2 items (Goals & Settings)
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(20.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
                 ) {
                     NavItem(
-                        title = "Theme",
-                        icon = Icons.Default.Palette,
-                        isSelected = currentTab == BottomNavTab.THEME,
-                        onClick = { onTabSelected(BottomNavTab.THEME) }
+                        title = "Goals",
+                        icon = Icons.Default.Flag,
+                        isSelected = currentTab == BottomNavTab.GOALS,
+                        onClick = { onTabSelected(BottomNavTab.GOALS) },
+                        modifier = Modifier.weight(1f)
                     )
                     NavItem(
-                        title = "Lock",
-                        icon = Icons.Default.Lock,
-                        isSelected = currentTab == BottomNavTab.LOCK,
-                        onClick = { onTabSelected(BottomNavTab.LOCK) }
+                        title = "Settings",
+                        icon = Icons.Default.Settings,
+                        isSelected = currentTab == BottomNavTab.SETTINGS,
+                        onClick = { onTabSelected(BottomNavTab.SETTINGS) },
+                        modifier = Modifier.weight(1f)
                     )
                 }
             }
         }
 
-        // Center Floating Action Button docked in the middle
+        // Prominent Center Add Expense Button docked in the navigation bar
         Box(
             modifier = Modifier
                 .align(Alignment.TopCenter)
-                .offset(y = (-4).dp)
+                .offset(y = (-6).dp)
                 .scale(fabScale)
-                .size(58.dp)
-                .shadow(elevation = 8.dp, shape = CircleShape)
+                .size(56.dp)
+                .shadow(elevation = 10.dp, shape = CircleShape)
                 .clip(CircleShape)
                 .background(
                     Brush.verticalGradient(
                         listOf(PrimaryBlue, Color(0xFF2563EB))
                     )
                 )
+                .border(2.5.dp, MaterialTheme.colorScheme.surface, CircleShape)
                 .clickable(
                     interactionSource = interactionSource,
                     indication = null,
@@ -152,20 +163,21 @@ private fun NavItem(
     title: String,
     icon: ImageVector,
     isSelected: Boolean,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     Column(
-        modifier = Modifier
+        modifier = modifier
             .clip(RoundedCornerShape(12.dp))
             .clickable { onClick() }
-            .padding(horizontal = 8.dp, vertical = 4.dp),
+            .padding(vertical = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
         Icon(
             imageVector = icon,
             contentDescription = title,
-            tint = if (isSelected) PrimaryBlue else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+            tint = if (isSelected) PrimaryBlue else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.65f),
             modifier = Modifier.size(22.dp)
         )
         Spacer(modifier = Modifier.height(2.dp))
@@ -173,7 +185,7 @@ private fun NavItem(
             text = title,
             fontSize = 10.sp,
             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-            color = if (isSelected) PrimaryBlue else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+            color = if (isSelected) PrimaryBlue else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.65f)
         )
     }
 }
