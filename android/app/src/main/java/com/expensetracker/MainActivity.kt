@@ -23,11 +23,14 @@ import com.expensetracker.ui.editor.ExpenseEditorSheet
 import com.expensetracker.ui.feed.KeepFeedScreen
 import com.expensetracker.ui.goals.GoalsScreen
 import com.expensetracker.ui.goals.SavingsGoal
+import com.expensetracker.ui.analytics.SpendChartsScreen
 import com.expensetracker.ui.navigation.BottomNavTab
 import com.expensetracker.ui.navigation.CenterDockBottomBar
+import com.expensetracker.ui.recurring.RecurringBillsScreen
 import com.expensetracker.ui.settings.SettingsScreen
 import com.expensetracker.ui.theme.ExpenseTrackerTheme
 import com.expensetracker.ui.theme.ThemePreferences
+import com.expensetracker.utils.ExportUtils
 import com.expensetracker.ui.wallet.WalletScreen
 import com.expensetracker.ui.wallet.WalletTx
 import com.google.firebase.auth.FirebaseAuth
@@ -93,6 +96,8 @@ class MainActivity : FragmentActivity() {
                 var allExpenses by remember { mutableStateOf<List<Expense>>(emptyList()) }
                 var editingExpense by remember { mutableStateOf<Expense?>(null) }
                 var isEditorOpen by remember { mutableStateOf(false) }
+                var isAnalyticsOpen by remember { mutableStateOf(false) }
+                var isRecurringOpen by remember { mutableStateOf(false) }
 
                 val currencySymbol = remember(userCurrency) {
                     when (userCurrency.uppercase()) {
@@ -143,10 +148,18 @@ class MainActivity : FragmentActivity() {
                             .addSnapshotListener { snap, _ ->
                                 if (snap != null && snap.exists()) {
                                     familyName = snap.getString("name") ?: "My Family"
-                                    familyHeadName = snap.getString("headName")
                                     familyInviteCode = snap.getString("inviteCode")
 
                                     val rawMembers = snap.get("members") as? List<Map<String, Any>>
+                                    val headFromDoc = snap.getString("headName")
+                                    val headFromMembers = rawMembers?.firstOrNull { (it["role"]?.toString() ?: "").equals("head", ignoreCase = true) }?.get("displayName")?.toString()
+                                    familyHeadName = if (!headFromDoc.isNullOrBlank() && !headFromDoc.contains("@")) {
+                                        headFromDoc.trim()
+                                    } else if (!headFromMembers.isNullOrBlank() && !headFromMembers.contains("@")) {
+                                        headFromMembers.trim()
+                                    } else {
+                                        headFromDoc ?: "Family Head"
+                                    }
                                     if (rawMembers != null) {
                                         familyMembers = rawMembers.map { m ->
                                             val mUid = m["uid"]?.toString() ?: ""
@@ -387,6 +400,7 @@ class MainActivity : FragmentActivity() {
                             ) {
                                 when (currentNavTab) {
                                     BottomNavTab.FEED -> {
+                                        val isHead = !familyHeadName.isNullOrBlank() && familyHeadName.equals(userDisplayName, ignoreCase = true)
                                         KeepFeedScreen(
                                             userName = userDisplayName,
                                             walletBalance = walletBalance,
@@ -395,6 +409,8 @@ class MainActivity : FragmentActivity() {
                                             onModeChange = { currentMode = it },
                                             dateGroups = dateGroups,
                                             pinnedExpenses = pinnedExpenses,
+                                            savingsGoals = savingsGoals,
+                                            isFamilyHead = isHead,
                                             isLoading = isLoadingData,
                                             onAddExpense = {
                                                 editingExpense = null
@@ -416,7 +432,14 @@ class MainActivity : FragmentActivity() {
                                             onLockSession = { isPinLocked = true },
                                             onOpenThemeSettings = { isThemeDialogOpen = true },
                                             onProfileClick = { isProfileOpen = true },
-                                            onBalanceClick = { currentNavTab = BottomNavTab.WALLET }
+                                            onBalanceClick = { currentNavTab = BottomNavTab.WALLET },
+                                            onOpenWallet = { currentNavTab = BottomNavTab.WALLET },
+                                            onOpenAddMoney = { currentNavTab = BottomNavTab.WALLET },
+                                            onRequestMoney = { currentNavTab = BottomNavTab.WALLET },
+                                            onTransferMoney = { currentNavTab = BottomNavTab.WALLET },
+                                            onOpenGoals = { currentNavTab = BottomNavTab.GOALS },
+                                            onCreateGoal = { currentNavTab = BottomNavTab.GOALS },
+                                            onOpenAnalytics = { isAnalyticsOpen = true }
                                         )
                                     }
                                     BottomNavTab.WALLET -> {
@@ -559,6 +582,11 @@ class MainActivity : FragmentActivity() {
                                                 auth.signOut()
                                                 isAuthenticated = false
                                                 isPinLocked = true
+                                            },
+                                            onOpenAnalytics = { isAnalyticsOpen = true },
+                                            onOpenRecurring = { isRecurringOpen = true },
+                                            onExportCSV = {
+                                                ExportUtils.exportExpensesToCSV(this@MainActivity, currentExpenses, currentMode.name)
                                             }
                                         )
                                     }
@@ -741,6 +769,33 @@ class MainActivity : FragmentActivity() {
                                         targetCollection.document(id).delete()
                                     }
                                     isEditorOpen = false
+                                }
+                            )
+                        }
+
+                        // Visual Spend Analytics Modal
+                        if (isAnalyticsOpen) {
+                            SpendChartsScreen(
+                                currentMode = currentMode,
+                                expenses = currentExpenses,
+                                currencySymbol = currencySymbol,
+                                onClose = { isAnalyticsOpen = false }
+                            )
+                        }
+
+                        // Recurring Subscriptions & Bills Modal
+                        if (isRecurringOpen) {
+                            RecurringBillsScreen(
+                                expenses = currentExpenses,
+                                currencySymbol = currencySymbol,
+                                onClose = { isRecurringOpen = false },
+                                onEditExpense = { exp ->
+                                    editingExpense = exp
+                                    isEditorOpen = true
+                                },
+                                onAddNew = {
+                                    editingExpense = null
+                                    isEditorOpen = true
                                 }
                             )
                         }

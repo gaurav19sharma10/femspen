@@ -1,5 +1,6 @@
 package com.expensetracker.ui.navigation
 
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
@@ -17,6 +18,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
@@ -46,17 +48,24 @@ fun CenterDockBottomBar(
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
 
+    // Ultra smooth spring physics scale & micro rotation animation starting from the button
     val fabScale by animateFloatAsState(
-        targetValue = if (isPressed) 0.88f else 1f,
-        animationSpec = spring(dampingRatio = 0.5f, stiffness = 450f),
+        targetValue = if (isPressed) 0.85f else 1f,
+        animationSpec = spring(dampingRatio = 0.45f, stiffness = Spring.StiffnessMediumLow),
         label = "fabScaleAnim"
+    )
+
+    val fabRotation by animateFloatAsState(
+        targetValue = if (isPressed) 45f else 0f,
+        animationSpec = spring(dampingRatio = 0.5f, stiffness = Spring.StiffnessMedium),
+        label = "fabRotation"
     )
 
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(88.dp)
-            .padding(horizontal = 12.dp, vertical = 6.dp),
+            .height(90.dp)
+            .padding(horizontal = 14.dp, vertical = 6.dp),
         contentAlignment = Alignment.BottomCenter
     ) {
         // Modern Floating Pill Navigation Bar
@@ -64,7 +73,7 @@ fun CenterDockBottomBar(
             shape = RoundedCornerShape(28.dp),
             color = MaterialTheme.colorScheme.surface,
             tonalElevation = 3.dp,
-            shadowElevation = if (isDark) 0.dp else 8.dp,
+            shadowElevation = if (isDark) 0.dp else 10.dp,
             border = if (isDark) CardDefaults.outlinedCardBorder() else null,
             modifier = Modifier
                 .fillMaxWidth()
@@ -79,12 +88,12 @@ fun CenterDockBottomBar(
             ) {
                 // Left 2 items (Feed & Wallet)
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.weight(1f)
                 ) {
                     NavItem(
-                        title = "Feed",
+                        title = "Expenses",
                         icon = Icons.Default.ViewAgenda,
                         isSelected = currentTab == BottomNavTab.FEED,
                         onClick = { onTabSelected(BottomNavTab.FEED) },
@@ -100,11 +109,11 @@ fun CenterDockBottomBar(
                 }
 
                 // Center space for docked button
-                Spacer(modifier = Modifier.width(64.dp))
+                Spacer(modifier = Modifier.width(66.dp))
 
                 // Right 2 items (Goals & Settings)
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.weight(1f)
                 ) {
@@ -126,18 +135,19 @@ fun CenterDockBottomBar(
             }
         }
 
-        // Prominent Center Add Expense Button docked in the navigation bar
+        // Prominent Center Add Expense Button docked in the navigation bar with spring bounce
         Box(
             modifier = Modifier
                 .align(Alignment.TopCenter)
                 .offset(y = (-6).dp)
                 .scale(fabScale)
+                .rotate(fabRotation)
                 .size(56.dp)
-                .shadow(elevation = 10.dp, shape = CircleShape)
+                .shadow(elevation = 12.dp, shape = CircleShape)
                 .clip(CircleShape)
                 .background(
                     Brush.verticalGradient(
-                        listOf(PrimaryBlue, Color(0xFF2563EB))
+                        listOf(PrimaryBlue, Color(0xFF1D4ED8))
                     )
                 )
                 .border(2.5.dp, MaterialTheme.colorScheme.surface, CircleShape)
@@ -178,7 +188,7 @@ private fun NavItem(
             imageVector = icon,
             contentDescription = title,
             tint = if (isSelected) PrimaryBlue else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.65f),
-            modifier = Modifier.size(22.dp)
+            modifier = Modifier.size(21.dp)
         )
         Spacer(modifier = Modifier.height(2.dp))
         Text(

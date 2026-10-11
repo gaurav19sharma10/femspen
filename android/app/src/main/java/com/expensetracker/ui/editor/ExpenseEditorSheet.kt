@@ -1,8 +1,10 @@
 package com.expensetracker.ui.editor
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -12,6 +14,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -38,20 +41,24 @@ fun ExpenseEditorSheet(
     onDelete: (String) -> Unit
 ) {
     var title by remember { mutableStateOf(initialExpense?.title ?: "") }
-    var amount by remember { mutableStateOf(initialExpense?.amount?.let { if (it > 0) it.toString() else "" } ?: "") }
-    var category by remember { mutableStateOf(initialExpense?.category ?: "Food") }
+    var amount by remember { mutableStateOf(initialExpense?.amount?.let { if (it > 0) "%.2f".format(it) else "" } ?: "") }
+    var category by remember { mutableStateOf(initialExpense?.category ?: "Food & Dining") }
     var selectedColor by remember { mutableStateOf(initialExpense?.color ?: "#F8F7F4") }
     var notes by remember { mutableStateOf(initialExpense?.notes ?: "") }
     var isRecurring by remember { mutableStateOf(initialExpense?.isRecurring ?: false) }
+    var recurringInterval by remember { mutableStateOf(initialExpense?.recurringInterval ?: "Monthly") }
     var familyMember by remember { mutableStateOf(initialExpense?.familyMember ?: "All") }
 
     val isDark = LocalIsDarkTheme.current
 
     val keepColors = listOf(
-        "#F8F7F4", "#FFE0B2", "#C8E6C9", "#BBDEFB", "#FFF9C4", "#E1BEE7", "#FFCDD2", "#DCEDC8"
+        "#F8F7F4", "#E3F2FD", "#FFF0E0", "#E8F5E9", "#FCE4EC", "#EDE7F6", "#FFF9C4", "#E0F2F1"
     )
 
-    val categories = listOf("Food", "Transport", "Bills", "Shopping", "Health", "Entertainment", "Education", "Home")
+    val categories = listOf(
+        "Food & Dining", "Transport", "Bills & Utilities", "Shopping",
+        "Health & Fitness", "Entertainment", "Home & Groceries", "Others"
+    )
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -83,7 +90,7 @@ fun ExpenseEditorSheet(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = if (initialExpense == null) "New Expense" else "Edit Expense",
+                    text = if (initialExpense == null) "Record Expense" else "Edit Expense",
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.ExtraBold,
                     color = MaterialTheme.colorScheme.onSurface
@@ -128,25 +135,28 @@ fun ExpenseEditorSheet(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Category Chips
+            // Category Chips (Horizontal Scrollable)
             Text(
                 text = "CATEGORY",
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                letterSpacing = 0.8.sp
             )
             Spacer(modifier = Modifier.height(6.dp))
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                categories.take(4).forEach { cat ->
-                    val isSelected = category == cat
+                categories.forEach { cat ->
+                    val isSelected = category.equals(cat, ignoreCase = true)
                     Surface(
-                        shape = RoundedCornerShape(10.dp),
+                        shape = RoundedCornerShape(12.dp),
                         color = if (isSelected) PrimaryBlue else MaterialTheme.colorScheme.surfaceVariant,
                         modifier = Modifier
-                            .clip(RoundedCornerShape(10.dp))
+                            .clip(RoundedCornerShape(12.dp))
                             .clickable { category = cat }
                     ) {
                         Text(
@@ -154,24 +164,104 @@ fun ExpenseEditorSheet(
                             fontSize = 11.sp,
                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                             color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                            modifier = Modifier.padding(horizontal = 11.dp, vertical = 7.dp)
                         )
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Recurring Subscription Toggle
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                border = CardDefaults.outlinedCardBorder(),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(14.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(Icons.Default.Repeat, contentDescription = null, tint = PrimaryBlue, modifier = Modifier.size(18.dp))
+                            Column {
+                                Text(
+                                    text = "Recurring Subscription / Bill",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = "Track renewal dues automatically",
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+
+                        Switch(
+                            checked = isRecurring,
+                            onCheckedChange = { isRecurring = it }
+                        )
+                    }
+
+                    AnimatedVisibility(visible = isRecurring) {
+                        Column(modifier = Modifier.padding(top = 10.dp)) {
+                            Text(
+                                text = "BILLING FREQUENCY",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                letterSpacing = 0.5.sp
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                listOf("Weekly", "Monthly", "Yearly").forEach { interval ->
+                                    val isChosen = recurringInterval.equals(interval, ignoreCase = true)
+                                    Surface(
+                                        shape = RoundedCornerShape(10.dp),
+                                        color = if (isChosen) PrimaryBlue else MaterialTheme.colorScheme.surface,
+                                        border = if (!isChosen) CardDefaults.outlinedCardBorder() else null,
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(10.dp))
+                                            .clickable { recurringInterval = interval }
+                                    ) {
+                                        Text(
+                                            text = interval,
+                                            fontSize = 11.sp,
+                                            fontWeight = if (isChosen) FontWeight.Bold else FontWeight.Medium,
+                                            color = if (isChosen) Color.White else MaterialTheme.colorScheme.onSurface,
+                                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
 
             // Color Palette Selector (Google Keep style)
             Text(
                 text = "COLOR NOTE TINT",
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                letterSpacing = 0.8.sp
             )
             Spacer(modifier = Modifier.height(8.dp))
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 keepColors.forEach { hex ->
@@ -183,7 +273,7 @@ fun ExpenseEditorSheet(
                             .clip(CircleShape)
                             .background(c)
                             .border(
-                                width = if (isSelected) 2.dp else 1.dp,
+                                width = if (isSelected) 2.5.dp else 1.dp,
                                 color = if (isSelected) PrimaryBlue else Color.Gray.copy(alpha = 0.3f),
                                 shape = CircleShape
                             )
@@ -232,7 +322,8 @@ fun ExpenseEditorSheet(
                             date = initialExpense?.date ?: "Today",
                             notes = notes.trim(),
                             familyMember = if (currentMode == ExpenseMode.FAMILY) familyMember else null,
-                            isRecurring = isRecurring
+                            isRecurring = isRecurring,
+                            recurringInterval = if (isRecurring) recurringInterval else null
                         )
                         onSave(toSave)
                     }

@@ -33,6 +33,7 @@ fun TopBalanceHeader(
     onLockSession: () -> Unit,
     onProfileClick: () -> Unit = {},
     onBalanceClick: () -> Unit = {},
+    onOpenAnalytics: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val isDark = LocalIsDarkTheme.current
@@ -146,6 +147,19 @@ fun TopBalanceHeader(
                         color = if (currentMode == ExpenseMode.FAMILY) Color(0xFF10B981) else PrimaryBlue
                     )
                 }
+            }
+
+            // Analytics Button
+            IconButton(
+                onClick = onOpenAnalytics,
+                modifier = Modifier.size(34.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.PieChart,
+                    contentDescription = "Spend Analytics",
+                    tint = PrimaryBlue,
+                    modifier = Modifier.size(18.dp)
+                )
             }
 
             // Theme Settings Button

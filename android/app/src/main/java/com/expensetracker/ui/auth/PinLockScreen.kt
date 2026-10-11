@@ -23,6 +23,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.expensetracker.ui.components.FemSpenVaultArt
 import com.expensetracker.ui.theme.LocalIsDarkTheme
 import com.expensetracker.ui.theme.PrimaryBlue
 
@@ -88,23 +89,13 @@ fun PinLockScreen(
                     .padding(28.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // Lock Icon
-                Box(
-                    modifier = Modifier
-                        .size(64.dp)
-                        .clip(CircleShape)
-                        .background(PrimaryBlue.copy(alpha = 0.12f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        Icons.Default.Lock,
-                        contentDescription = null,
-                        tint = PrimaryBlue,
-                        modifier = Modifier.size(28.dp)
-                    )
-                }
+                // Handcrafted Vault Vector Art
+                FemSpenVaultArt(
+                    size = 110.dp,
+                    modifier = Modifier.padding(bottom = 6.dp)
+                )
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(10.dp))
 
                 Text(
                     text = "Unlock FemSpen",
